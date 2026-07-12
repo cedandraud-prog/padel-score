@@ -51,11 +51,12 @@ export function MatchScreen({
           </div>
         ))}
         {snapshot.display.isTieBreak && <p className="badge">Tie-break</p>}
-        {snapshot.display.winner && (
-          <p className="winner" role="status">
-            Victoire de {snapshot.display.teams[snapshot.display.winner].name}
-          </p>
-        )}
+        {snapshot.display.winner &&
+          snapshot.session.state !== 'IN_PROGRESS' && (
+            <p className="winner" role="status">
+              Victoire de {snapshot.display.teams[snapshot.display.winner].name}
+            </p>
+          )}
       </section>
 
       <section className="status-panel" aria-live="polite">
@@ -108,7 +109,7 @@ export function MatchScreen({
         >
           {listening ? 'Désactiver l’écoute' : 'Activer l’écoute'}
         </button>
-        {snapshot.phase === 'finished' && (
+        {snapshot.phase === 'session-finished' && (
           <button type="button" className="primary" onClick={onNewMatch}>
             Nouveau match
           </button>

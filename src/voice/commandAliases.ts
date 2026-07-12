@@ -5,6 +5,9 @@ type CommandAliasKey =
   | 'correct'
   | 'stop-listening'
   | 'resume-listening'
+  | 'finish-match'
+  | 'confirm'
+  | 'new-match'
 
 export type VoiceCommand =
   | { type: 'SCORE' }
@@ -14,6 +17,9 @@ export type VoiceCommand =
   | { type: 'CORRECT_POINTS_INLINE'; spokenScore: string }
   | { type: 'STOP_LISTENING' }
   | { type: 'RESUME_LISTENING' }
+  | { type: 'FINISH_MATCH' }
+  | { type: 'CONFIRM' }
+  | { type: 'NEW_MATCH' }
 
 export const COMMAND_ALIASES = {
   score: ['score'],
@@ -22,6 +28,9 @@ export const COMMAND_ALIASES = {
   correct: ['corrige', 'corriger', 'corrigez'],
   'stop-listening': ['termine ecoute'],
   'resume-listening': ['reprends ecoute'],
+  'finish-match': ['fin de match'],
+  confirm: ['confirmer'],
+  'new-match': ['nouveau match'],
 } as const satisfies Record<CommandAliasKey, readonly string[]>
 
 export const ALL_COMMAND_ALIASES: readonly string[] =
@@ -42,6 +51,12 @@ const EXACT_COMMANDS: ReadonlyArray<{
     aliases: COMMAND_ALIASES['resume-listening'],
     command: { type: 'RESUME_LISTENING' },
   },
+  {
+    aliases: COMMAND_ALIASES['finish-match'],
+    command: { type: 'FINISH_MATCH' },
+  },
+  { aliases: COMMAND_ALIASES.confirm, command: { type: 'CONFIRM' } },
+  { aliases: COMMAND_ALIASES['new-match'], command: { type: 'NEW_MATCH' } },
 ]
 
 export function resolveVoiceCommand(

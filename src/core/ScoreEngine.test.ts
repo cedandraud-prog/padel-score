@@ -359,4 +359,30 @@ describe('ScoreEngine', () => {
     expect(state.points).toEqual({ A: 0, B: 0 })
     expect(state.sets).toEqual({ A: 0, B: 0 })
   })
+
+  it('continue après deux sets gagnés en FREE_PLAY', () => {
+    const engine = new ScoreEngine({ format: 'FREE_PLAY' })
+    winGames(engine, 'A', 12)
+    expect(engine.getState().winner).toBeNull()
+    expect(() => engine.awardPoint('B')).not.toThrow()
+    expect(engine.getState().points.B).toBe(1)
+  })
+
+  it('conserve tous les sets et commence un quatrième set en FREE_PLAY', () => {
+    const engine = new ScoreEngine({ format: 'FREE_PLAY' })
+    winGames(engine, 'A', 12)
+    winGames(engine, 'B', 6)
+    engine.awardPoint('A')
+    expect(engine.getState().sets).toEqual({ A: 2, B: 1 })
+    expect(engine.getState().completedSets).toHaveLength(3)
+    expect(engine.getState().games).toEqual({ A: 0, B: 0 })
+    expect(engine.getState().points.A).toBe(1)
+  })
+
+  it('conserve le blocage historique en REGULAR_MATCH', () => {
+    const engine = new ScoreEngine({ format: 'REGULAR_MATCH' })
+    winGames(engine, 'A', 12)
+    expect(engine.getState().winner).toBe('A')
+    expect(() => engine.awardPoint('B')).toThrow('Le match est terminé.')
+  })
 })

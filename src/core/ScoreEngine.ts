@@ -51,8 +51,10 @@ function createState(options: ScoreEngineOptions = {}): MatchState {
 export class ScoreEngine {
   private state: MatchState
   private readonly history: MatchState[] = []
+  private format: NonNullable<ScoreEngineOptions['format']>
 
   constructor(options: ScoreEngineOptions = {}) {
+    this.format = options.format ?? 'REGULAR_MATCH'
     this.state = createState(options)
   }
 
@@ -62,6 +64,7 @@ export class ScoreEngine {
       teamNames: { ...this.state.teams, ...options.teamNames },
       servingTeam: options.servingTeam,
     })
+    this.format = options.format ?? this.format
   }
 
   awardPoint(team: TeamId): void {
@@ -191,7 +194,10 @@ export class ScoreEngine {
     this.state.isTieBreak = false
     this.state.tieBreakInitialServer = null
 
-    if (this.state.sets[team] === SETS_TO_WIN_MATCH) {
+    if (
+      this.format === 'REGULAR_MATCH' &&
+      this.state.sets[team] === SETS_TO_WIN_MATCH
+    ) {
       this.state.winner = team
     }
   }

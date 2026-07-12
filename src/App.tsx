@@ -7,6 +7,7 @@ import type { MatchConfiguration } from './application/matchConfiguration'
 import { CorrectionPanel } from './ui/CorrectionPanel'
 import { MatchScreen } from './ui/MatchScreen'
 import { MatchSetup } from './ui/MatchSetup'
+import { VoiceDiagnostics } from './ui/VoiceDiagnostics'
 import { SpeechRecognitionService } from './voice/SpeechRecognitionService'
 import { SpeechSynthesisService } from './voice/SpeechSynthesisService'
 import { CommandFeedbackService } from './voice/CommandFeedbackService'
@@ -30,6 +31,7 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = controller.subscribe(setSnapshot)
+    controller.listenForNewMatch()
     return () => {
       unsubscribe()
       controller.destroy()
@@ -51,18 +53,21 @@ export default function App() {
       </header>
 
       {snapshot.phase === 'setup' || snapshot.phase === 'voice-setup' ? (
-        <MatchSetup
-          message={snapshot.message}
-          configuration={snapshot.editingConfiguration}
-          voiceSetup={snapshot.voiceSetup}
-          onConfigurationChange={(configuration) =>
-            controller.updateEditingConfiguration(configuration)
-          }
-          onStart={startMatch}
-          onVoiceSetup={(feedbackMode) =>
-            void controller.startVoiceSetup(feedbackMode)
-          }
-        />
+        <>
+          <MatchSetup
+            message={snapshot.message}
+            configuration={snapshot.editingConfiguration}
+            voiceSetup={snapshot.voiceSetup}
+            onConfigurationChange={(configuration) =>
+              controller.updateEditingConfiguration(configuration)
+            }
+            onStart={startMatch}
+            onVoiceSetup={(feedbackMode) =>
+              void controller.startNewMatchVoiceSetup(feedbackMode)
+            }
+          />
+          <VoiceDiagnostics snapshot={snapshot} />
+        </>
       ) : (
         <>
           <MatchScreen
@@ -73,7 +78,7 @@ export default function App() {
             onFullScore={() => void controller.announceFullScore()}
             onCorrect={() => void controller.enterCorrection()}
             onToggleListening={() => controller.toggleListening()}
-            onNewMatch={() => controller.prepareNewMatch()}
+            onNewMatch={() => void controller.startNewMatchVoiceSetup()}
           />
           {snapshot.phase === 'correction' && (
             <CorrectionPanel

@@ -3,6 +3,13 @@ import { normalizeSpeech } from './normalizeSpeech'
 import { resolveVoiceCommand } from './commandAliases'
 
 describe('resolveVoiceCommand', () => {
+  it.each([
+    ['Fin de match', 'FINISH_MATCH'],
+    ['Confirmer', 'CONFIRM'],
+    ['Nouveau match', 'NEW_MATCH'],
+  ])('interprète exactement « %s »', (transcript, type) => {
+    expect(resolveVoiceCommand(normalizeSpeech(transcript))).toEqual({ type })
+  })
   it.each(['Corrige', 'Corriger', 'Corrigé', 'Corrigez'])(
     'interprète « %s » comme un démarrage de correction',
     (transcript) => {

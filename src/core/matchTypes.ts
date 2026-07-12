@@ -8,7 +8,10 @@ export interface TeamNames {
 export interface ScoreEngineOptions {
   teamNames?: Partial<TeamNames>
   servingTeam?: TeamId
+  format?: MatchFormat
 }
+
+export type MatchFormat = 'FREE_PLAY' | 'REGULAR_MATCH'
 
 export interface SetScore {
   A: number

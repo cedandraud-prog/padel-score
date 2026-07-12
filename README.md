@@ -59,6 +59,10 @@ Les identifiants vocaux sont comparés exactement après normalisation. Ils doiv
 - `Corrige` / `Corriger` / `Corrigez` : demander vocalement un nouveau score de points ;
 - `Corrige 30 30` : appliquer immédiatement une correction de points en une phrase ;
 - `Termine écoute` : arrêter volontairement la reconnaissance.
+- `Fin de match` : demander la clôture manuelle de la session, puis `Confirmer` ou `Annuler` ;
+- `Nouveau match` : lancer directement la configuration vocale lorsqu’aucune session n’est en cours.
+
+Le MLP utilise le format `FREE_PLAY` : les sets continuent sans limite et seule la commande confirmée `Fin de match` clôture la session.
 
 `Reprends écoute` est réservé mais ne peut pas être entendu lorsque l’écoute est coupée. Utiliser le bouton **Activer l’écoute** sur le PC.
 

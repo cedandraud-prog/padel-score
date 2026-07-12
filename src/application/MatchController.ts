@@ -23,6 +23,7 @@ import {
   type AnnounceableMatchState,
 } from './matchAnnouncements'
 import { parseSpokenPointScore } from './parseSpokenPointScore'
+import { GameSession, type GameSessionSnapshot } from './GameSession'
 import {
   ConversationEngine,
   type ConversationSnapshot,
@@ -37,9 +38,16 @@ import {
   VoiceMatchSetup,
   type VoiceMatchSetupSnapshot,
 } from './VoiceMatchSetup'
+import { WaitingVoiceEntry } from './WaitingVoiceEntry'
 
 export type MatchPhase =
-  'setup' | 'voice-setup' | 'match' | 'correction' | 'finished'
+  | 'setup'
+  | 'voice-setup'
+  | 'match'
+  | 'correction'
+  | 'session-end-confirmation'
+  | 'session-finished'
+  | 'finished'
 export type MicrophoneStatus =
   | 'inactive'
   | 'starting'
@@ -77,6 +85,7 @@ export interface MatchControllerSnapshot {
   conversation: ConversationSnapshot
   recognitionAttemptId: number | null
   recognitionLifecycle: string
+  session: GameSessionSnapshot
 }
 
 export interface StartMatchOptions {
@@ -106,6 +115,7 @@ function snapshotOf(engine: ScoreEngine): AnnounceableMatchState {
 
 export class MatchController {
   private engine = new ScoreEngine()
+  private readonly session = new GameSession()
   private phase: MatchPhase = 'setup'
   private microphoneStatus: MicrophoneStatus = 'inactive'
   private lastTranscript = ''
@@ -123,6 +133,7 @@ export class MatchController {
   private editingConfiguration = createDefaultMatchConfiguration()
   private editingRevision = 0
   private readonly voiceSetup = new VoiceMatchSetup()
+  private readonly waitingVoiceEntry = new WaitingVoiceEntry()
   private voiceSetupSnapshot: VoiceMatchSetupSnapshot | null = null
   private lastExecutedVoiceCommand: { transcript: string; at: number } | null =
     null
@@ -184,6 +195,7 @@ export class MatchController {
       conversation: this.conversation.getSnapshot(),
       recognitionAttemptId: this.pendingRecognitionAttempt,
       recognitionLifecycle: this.recognitionLifecycle,
+      session: this.session.getSnapshot(),
     }
   }
 
@@ -208,7 +220,10 @@ export class MatchController {
         B: options.configuration.teamB.displayName.trim(),
       },
       servingTeam: options.configuration.servingTeam,
+      format: 'FREE_PLAY',
     })
+    this.session.reset()
+    this.session.start()
     this.configuration = copyMatchConfiguration(options.configuration)
     this.editingConfiguration = copyMatchConfiguration(options.configuration)
     this.voiceSetupSnapshot = null
@@ -242,6 +257,7 @@ export class MatchController {
   }
 
   async startVoiceSetup(feedbackMode: FeedbackMode = 'NONE'): Promise<void> {
+    if (this.phase === 'voice-setup') return
     if (!this.recognition.isSupported) {
       this.message = 'Reconnaissance vocale indisponible dans ce navigateur.'
       this.microphoneStatus = 'unavailable'
@@ -262,6 +278,25 @@ export class MatchController {
     await this.announce(result.announcement, true)
   }
 
+  listenForNewMatch(): void {
+    if (this.phase !== 'setup' || !this.recognition.isSupported) return
+    this.conversation.start()
+    this.startRecognition()
+  }
+
+  async startNewMatchVoiceSetup(
+    feedbackMode: FeedbackMode = this.feedbackMode,
+  ): Promise<void> {
+    if (this.session.getSnapshot().state === 'IN_PROGRESS') {
+      this.message = "Le match n'est pas terminé."
+      this.emit()
+      await this.announce("Le match n'est pas terminé.")
+      return
+    }
+    if (this.phase !== 'setup') this.prepareNewMatch()
+    await this.startVoiceSetup(feedbackMode)
+  }
+
   updateEditingConfiguration(configuration: MatchConfiguration): void {
     if (this.phase !== 'setup' && this.phase !== 'voice-setup') return
     this.editingConfiguration = copyMatchConfiguration(configuration)
@@ -280,7 +315,34 @@ export class MatchController {
     result: SpeechTranscript,
     sourceRevision = this.editingRevision,
   ): Promise<void> {
-    if (this.phase === 'setup' || this.phase === 'finished') return
+    if (this.phase === 'setup') {
+      this.lastTranscript = result.transcript
+      const waitingResult = this.waitingVoiceEntry.interpret(result.transcript)
+      this.normalizedTranscript = waitingResult.normalizedTranscript
+      const confidence = usableRecognitionConfidence(result.confidence)
+      if (
+        (confidence === undefined ||
+          confidence >= MINIMUM_RECOGNITION_CONFIDENCE) &&
+        waitingResult.type === 'START_NEW_MATCH'
+      ) {
+        this.lastCommand = 'NEW_MATCH'
+        this.rejectionReason = ''
+        this.emit()
+        await this.startNewMatchVoiceSetup()
+      } else {
+        this.lastCommand = 'Commande ignorée sur l’écran d’attente'
+        this.rejectionReason =
+          confidence !== undefined &&
+          confidence < MINIMUM_RECOGNITION_CONFIDENCE
+            ? 'Confiance insuffisante.'
+            : waitingResult.type === 'IGNORED'
+              ? waitingResult.reason
+              : ''
+        this.emit()
+      }
+      return
+    }
+    if (this.phase === 'finished') return
     this.lastTranscript = result.transcript
     const normalized = normalizeSpeech(result.transcript)
     this.normalizedTranscript = normalized
@@ -348,12 +410,29 @@ export class MatchController {
     }
 
     if (this.phase === 'voice-setup') {
+      if (resolveVoiceCommand(normalized)?.type === 'NEW_MATCH') return
       await this.handleVoiceSetupTranscript(result.transcript)
       return
     }
 
     if (this.phase === 'correction') {
       await this.handlePointCorrection(result.transcript, normalized)
+      return
+    }
+
+    if (this.phase === 'session-end-confirmation') {
+      await this.handleSessionEndConfirmation(normalized)
+      return
+    }
+
+    if (this.phase === 'session-finished') {
+      if (resolveVoiceCommand(normalized)?.type === 'NEW_MATCH') {
+        await this.startNewMatchVoiceSetup()
+      } else {
+        this.lastCommand = 'Session terminée'
+        this.message = 'Seule la commande « Nouveau match » est disponible.'
+        this.emit()
+      }
       return
     }
 
@@ -427,6 +506,20 @@ export class MatchController {
         this.message = 'L’écoute est déjà active.'
         this.emit()
         return
+      case 'FINISH_MATCH':
+        await this.requestSessionFinish()
+        return
+      case 'NEW_MATCH':
+        this.lastCommand = 'Nouveau match refusé'
+        this.message = "Le match n'est pas terminé."
+        this.emit()
+        await this.announce("Le match n'est pas terminé.")
+        return
+      case 'CONFIRM':
+        this.lastCommand = 'Commande inconnue'
+        this.message = 'Aucune confirmation n’est attendue.'
+        this.emit()
+        return
       default:
         this.lastCommand = 'Commande inconnue'
         this.message = normalized
@@ -444,12 +537,12 @@ export class MatchController {
     const next = snapshotOf(this.engine)
     this.message = ''
 
-    if (next.match.winner) {
-      this.phase = 'finished'
-      this.conversation.stop()
-    }
     this.emit()
-    await this.announce(buildTransitionAnnouncement(previous, next, team))
+    await this.announce(
+      buildTransitionAnnouncement(previous, next, team, {
+        suppressMatchWinner: true,
+      }),
+    )
   }
 
   async undo(): Promise<boolean> {
@@ -564,6 +657,7 @@ export class MatchController {
     this.recognition.stop()
     this.synthesis.cancel()
     this.engine = new ScoreEngine()
+    this.session.reset()
     this.phase = 'setup'
     this.microphoneStatus = 'inactive'
     this.lastTranscript = ''
@@ -601,6 +695,47 @@ export class MatchController {
     this.feedback.dispose()
     this.readinessCue.dispose()
     this.listeners.clear()
+  }
+
+  private async requestSessionFinish(): Promise<void> {
+    if (!this.session.requestFinish()) return
+    this.phase = 'session-end-confirmation'
+    this.conversation.enterGuidedMode()
+    this.lastCommand = 'Fin de match'
+    this.message = 'Confirmer ?'
+    this.emit()
+    await this.announce('Confirmer ?', true)
+  }
+
+  private async handleSessionEndConfirmation(
+    normalizedTranscript: string,
+  ): Promise<void> {
+    const command = resolveVoiceCommand(normalizedTranscript)
+    if (command?.type === 'UNDO') {
+      this.session.cancelFinish()
+      this.conversation.manualCancel()
+      this.phase = 'match'
+      this.lastCommand = 'Fin de match annulée'
+      this.message = 'Session reprise.'
+      this.emit()
+      return
+    }
+    if (command?.type !== 'CONFIRM') {
+      this.lastCommand = 'Confirmation attendue'
+      this.message = 'Dites Confirmer ou Annuler.'
+      this.emit()
+      return
+    }
+
+    this.session.confirmFinish()
+    this.conversation.exitGuidedMode()
+    this.phase = 'session-finished'
+    this.lastCommand = 'Session terminée'
+    this.message = 'Session terminée'
+    this.emit()
+    await this.announce(
+      `Fin du match. ${buildFullScoreAnnouncement(snapshotOf(this.engine))}`,
+    )
   }
 
   private async handlePointCorrection(
@@ -725,9 +860,12 @@ export class MatchController {
 
   private isListeningPhase(): boolean {
     return (
+      this.phase === 'setup' ||
       this.phase === 'voice-setup' ||
       this.phase === 'match' ||
-      this.phase === 'correction'
+      this.phase === 'correction' ||
+      this.phase === 'session-end-confirmation' ||
+      this.phase === 'session-finished'
     )
   }
 
@@ -750,6 +888,7 @@ export class MatchController {
       this.voiceSetupSnapshot = null
       this.recognition.stop()
       await this.announce(result.announcement)
+      this.listenForNewMatch()
       return
     }
     if (result.completedConfiguration) {
@@ -904,10 +1043,13 @@ export class MatchController {
     this.microphoneStatus = 'listening'
     this.recognitionLifecycle = `onstart reçu pour la tentative ${attemptId}`
     const intents = this.conversation.handleSpeechStarted()
-    this.message = 'À vous de parler'
+    const expectsResponse = intents.some(
+      (intent) => intent.type === 'PlayReadyBeep',
+    )
+    if (expectsResponse || !this.message) this.message = 'À vous de parler'
     this.emit()
 
-    if (!intents.some((intent) => intent.type === 'PlayReadyBeep')) return
+    if (!expectsResponse) return
     this.readinessPlaying = true
     try {
       await this.readinessCue.play()

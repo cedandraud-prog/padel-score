@@ -85,10 +85,15 @@ export function buildTransitionAnnouncement(
   previous: AnnounceableMatchState,
   next: AnnounceableMatchState,
   scoringTeam: TeamId,
+  options: { suppressMatchWinner?: boolean } = {},
 ): string {
   const teamName = next.display.teams[scoringTeam].name
 
-  if (next.match.winner && !previous.match.winner) {
+  if (
+    !options.suppressMatchWinner &&
+    next.match.winner &&
+    !previous.match.winner
+  ) {
     return `victoire des ${teamName}. Score final, ${setsAnnouncement(next)}`
   }
 

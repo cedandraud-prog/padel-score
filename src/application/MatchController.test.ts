@@ -733,7 +733,7 @@ describe('MatchController', () => {
     expect(recognition.startCount).toBe(2)
   })
 
-  it('arrête l’écoute à la fin du match', async () => {
+  it('ne termine pas automatiquement la session au vainqueur réglementaire', async () => {
     const recognition = new MockRecognition()
     const synthesis = new MockSynthesis()
     const { controller } = createController(recognition, synthesis)
@@ -744,9 +744,12 @@ describe('MatchController', () => {
       }
     }
 
-    expect(controller.getSnapshot().phase).toBe('finished')
-    expect(controller.getSnapshot().microphoneStatus).toBe('disabled')
-    expect(synthesis.spoken.at(-1)).toContain('victoire des Lynx')
+    expect(controller.getSnapshot().phase).toBe('match')
+    expect(controller.getSnapshot().session.state).toBe('IN_PROGRESS')
+    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    expect(synthesis.spoken.at(-1)).toContain('deuxième set Lynx')
+    await controller.awardPoint('B')
+    expect(controller.getSnapshot().display.teams.B.points).toBe('15')
   })
 
   it('reste utilisable manuellement sans SpeechRecognition', async () => {
@@ -1303,5 +1306,178 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
       'Impossible de démarrer la reconnaissance vocale.',
     )
     expect(controller.getSnapshot().conversation.state).toBe('ERROR')
+  })
+})
+
+describe('MatchController session de jeu', () => {
+  it('démarre la session avec le match', () => {
+    const { controller } = createController()
+    expect(controller.getSnapshot().session.state).toBe('IN_PROGRESS')
+  })
+
+  it('demande une confirmation pour Fin de match', async () => {
+    const { controller, synthesis } = createController()
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    expect(controller.getSnapshot().phase).toBe('session-end-confirmation')
+    expect(controller.getSnapshot().session.isFinishConfirmationPending).toBe(
+      true,
+    )
+    expect((synthesis as MockSynthesis).spoken).toContain('Confirmer ?')
+  })
+
+  it('Annuler reprend la session sans changer le score', async () => {
+    const { controller } = createController()
+    await controller.awardPoint('A')
+    const before = controller.getSnapshot().display
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    await controller.handleTranscript({ transcript: 'Annuler' })
+    expect(controller.getSnapshot().phase).toBe('match')
+    expect(controller.getSnapshot().session.state).toBe('IN_PROGRESS')
+    expect(controller.getSnapshot().display).toEqual(before)
+  })
+
+  it('Confirmer termine la session et conserve exactement le score', async () => {
+    const { controller, synthesis } = createController()
+    await controller.awardPoint('A')
+    await controller.awardPoint('B')
+    const before = controller.getSnapshot().display
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    await controller.handleTranscript({ transcript: 'Confirmer' })
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.session.state).toBe('FINISHED')
+    expect(snapshot.phase).toBe('session-finished')
+    expect(snapshot.display).toEqual(before)
+    expect((synthesis as MockSynthesis).spoken.at(-1)).toContain(
+      'Fin du match.',
+    )
+  })
+
+  it('refuse Nouveau match pendant une session en cours', async () => {
+    const { controller } = createController()
+    await controller.handleTranscript({ transcript: 'Nouveau match' })
+    expect(controller.getSnapshot().phase).toBe('match')
+    expect(controller.getSnapshot().message).toBe("Le match n'est pas terminé.")
+  })
+
+  it('Nouveau match après la fin réinitialise puis lance la configuration vocale', async () => {
+    const { controller } = createController()
+    await controller.awardPoint('A')
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    await controller.handleTranscript({ transcript: 'Confirmer' })
+    await controller.handleTranscript({ transcript: 'Nouveau match' })
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.phase).toBe('voice-setup')
+    expect(snapshot.session.state).toBe('NOT_STARTED')
+    expect(snapshot.display.teams.A.points).toBe('0')
+    expect(snapshot.display.teams.A.games).toBe(0)
+    expect(snapshot.display.teams.A.sets).toBe(0)
+  })
+
+  it('ignore les commandes de score après la fin de session', async () => {
+    const { controller } = createController()
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    await controller.handleTranscript({ transcript: 'Confirmer' })
+    await controller.handleTranscript({ transcript: 'Lynx' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+  })
+
+  it('Nouveau match depuis NOT_STARTED lance directement VoiceMatchSetup', async () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.listenForNewMatch()
+    expect(recognition.startCount).toBe(1)
+    await controller.handleTranscript({ transcript: 'Nouveau match' })
+    expect(controller.getSnapshot().phase).toBe('voice-setup')
+    expect(controller.getSnapshot().voiceSetup?.step).toBe('team-a-name')
+  })
+
+  it('ignore silencieusement toute autre parole depuis NOT_STARTED', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.listenForNewMatch()
+    const before = controller.getSnapshot()
+    await controller.handleTranscript({ transcript: 'Bonjour tout le monde' })
+    const after = controller.getSnapshot()
+    expect(after.phase).toBe('setup')
+    expect(after.message).toBe(before.message)
+    expect(after.voiceSetup).toBeNull()
+  })
+
+  it('n’exécute pas un résultat intermédiaire sur l’écran d’attente', () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.listenForNewMatch()
+    recognition.handlers?.onDiagnostic({
+      rawTranscript: 'Nouveau match',
+      rawConfidence: 0.9,
+      isFinal: false,
+      resultsLength: 1,
+      resultIndex: 0,
+    })
+    expect(controller.getSnapshot().phase).toBe('setup')
+    expect(controller.getSnapshot().voiceSetup).toBeNull()
+  })
+
+  it('ne lance qu’une seule configuration vocale', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.listenForNewMatch()
+    await controller.handleTranscript({ transcript: 'Nouveau match' })
+    const firstSnapshot = controller.getSnapshot().voiceSetup
+    await controller.handleTranscript({ transcript: 'Nouveau match' })
+    expect(controller.getSnapshot().voiceSetup).toEqual(firstSnapshot)
+  })
+
+  it('ne démarre pas plusieurs reconnaissances concurrentes en attente', () => {
+    const recognition = new MockRecognition(true, false)
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.listenForNewMatch()
+    controller.listenForNewMatch()
+    expect(recognition.startCount).toBe(1)
+  })
+
+  it('annonce le premier prompt puis attend onstart avant le bip', async () => {
+    const recognition = new MockRecognition(true, false)
+    const synthesis = new MockSynthesis()
+    const readiness = new MockReadinessCue()
+    const controller = new MatchController(
+      recognition,
+      synthesis,
+      undefined,
+      undefined,
+      readiness,
+    )
+    controller.listenForNewMatch()
+    recognition.handlers?.onStart()
+    await Promise.resolve()
+    await controller.handleTranscript({ transcript: 'Nouveau match' })
+    expect(synthesis.spoken).toContain('Nom de la première équipe ?')
+    expect(readiness.playCount).toBe(0)
+    recognition.handlers?.onStart()
+    await Promise.resolve()
+    expect(readiness.playCount).toBe(1)
+  })
+
+  it('le bouton et la commande utilisent le même cas d’usage vocal', async () => {
+    const commandController = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    commandController.listenForNewMatch()
+    await commandController.handleTranscript({ transcript: 'Nouveau match' })
+
+    const buttonController = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    await buttonController.startNewMatchVoiceSetup()
+
+    expect(buttonController.getSnapshot().voiceSetup).toEqual(
+      commandController.getSnapshot().voiceSetup,
+    )
   })
 })
