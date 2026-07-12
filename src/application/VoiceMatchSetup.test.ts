@@ -1,186 +1,162 @@
 import { describe, expect, it } from 'vitest'
-import { validateMatchConfiguration } from './matchConfiguration'
-import { VoiceMatchSetup } from './VoiceMatchSetup'
+import { VoiceMatchSetup, areVoiceNamesValidated } from './VoiceMatchSetup'
+import {
+  createDefaultMatchConfiguration,
+  validateMatchConfiguration,
+  validateVoiceName,
+} from './matchConfiguration'
 
-function reachAChoice(setup: VoiceMatchSetup) {
-  setup.start()
-  return setup.handle('Les Champions')
-}
-
-function configureTeams(setup: VoiceMatchSetup) {
-  setup.start()
-  setup.handle('Les Champions')
-  setup.handle('Conserver')
-  setup.handle('Les Invincibles')
-  return setup.handle('Conserver')
-}
-
-function reachConfirmation(setup: VoiceMatchSetup) {
-  configureTeams(setup)
-  return setup.handle('Bravo')
+function advanceTeamA(setup: VoiceMatchSetup): void {
+  setup.handle('Champions')
+  setup.handle('Rouge')
+  setup.handle('rouge')
 }
 
 describe('VoiceMatchSetup', () => {
-  it('demande le nom affiché de l’équipe A', () => {
-    const result = new VoiceMatchSetup().start()
-    expect(result.snapshot.step).toBe('team-a-name')
-    expect(result.snapshot.prompt).toBe('Dites le nom de la première équipe.')
+  it('capture et affiche le nom affiché A', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+    const result = setup.handle('Champions')
+    expect(result.snapshot.configuration.teamA.displayName).toBe('Champions')
+    expect(result.snapshot.step).toBe('team-a-voice-name')
   })
 
-  it('rend immédiatement visible le nom A capturé', () => {
-    const result = reachAChoice(new VoiceMatchSetup())
-    expect(result.snapshot.configuration.teamA.displayName).toBe(
-      'Les Champions',
+  it('demande directement le nom vocal A', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+    expect(setup.handle('Champions').announcement).toBe(
+      'Nom vocal de l’équipe Champions ?',
     )
   })
 
-  it('Modifier ouvre une étape dédiée sans devenir la valeur', () => {
-    const setup = new VoiceMatchSetup()
-    reachAChoice(setup)
-    const result = setup.handle('Modifier')
-    expect(result.snapshot.step).toBe('team-a-custom-identifier')
-    expect(result.snapshot.configuration.teamA.voiceIdentifier).toBe('Alpha')
-  })
-
-  it('ne prononce aucune nouvelle question après Modifier', () => {
-    const setup = new VoiceMatchSetup()
-    reachAChoice(setup)
-    expect(setup.handle('Modifier').announcement).toBe('')
-  })
-
-  it('accepte Tango comme identifiant A et le rend immédiatement visible', () => {
-    const setup = new VoiceMatchSetup()
-    reachAChoice(setup)
-    setup.handle('Modifier')
-    const result = setup.handle('Tango')
-    expect(result.snapshot.configuration.teamA.voiceIdentifier).toBe('Tango')
-    expect(result.snapshot.step).toBe('team-b-name')
-    expect(result.announcement).toContain('Identifiant vocal Tango.')
-  })
-
-  it.each(['nouvel identifiant', 'changer', 'modifier', 'conserver'])(
-    'ne transforme jamais « %s » en identifiant personnalisé',
-    (candidate) => {
-      const setup = new VoiceMatchSetup()
-      reachAChoice(setup)
-      setup.handle('Modifier')
-      const result = setup.handle(candidate)
-      expect(result.snapshot.step).toBe('team-a-custom-identifier')
-      expect(result.snapshot.configuration.teamA.voiceIdentifier).toBe('Alpha')
-    },
-  )
-
-  it('garde l’étape personnalisée et redemande après une valeur invalide', () => {
-    const setup = new VoiceMatchSetup()
-    reachAChoice(setup)
-    setup.handle('Modifier')
-    const result = setup.handle('score')
-    expect(result.snapshot.step).toBe('team-a-custom-identifier')
-    expect(result.announcement).not.toContain('Quel identifiant')
-  })
-
-  it('Conserver garde Alpha', () => {
-    const setup = new VoiceMatchSetup()
-    reachAChoice(setup)
-    const result = setup.handle('Conserver')
-    expect(result.snapshot.configuration.teamA.voiceIdentifier).toBe('Alpha')
-    expect(result.snapshot.step).toBe('team-b-name')
-  })
-
-  it('rend immédiatement visible le nom B capturé', () => {
+  it('capture et affiche le nom vocal A avant son test', () => {
     const setup = new VoiceMatchSetup()
     setup.start()
     setup.handle('Champions')
-    setup.handle('Conserver')
-    const result = setup.handle('Invincibles')
-    expect(result.snapshot.configuration.teamB.displayName).toBe('Invincibles')
+    const result = setup.handle('Rouge')
+    expect(result.snapshot.configuration.teamA.voiceName).toBe('Rouge')
+    expect(result.snapshot.step).toBe('team-a-validation')
+    expect(result.announcement).toBe(
+      'Test de reconnaissance. Dites Rouge après le bip.',
+    )
   })
 
-  it('rend immédiatement visible un identifiant B personnalisé', () => {
+  it('valide exactement le nom vocal A après normalisation', () => {
     const setup = new VoiceMatchSetup()
     setup.start()
     setup.handle('Champions')
-    setup.handle('Conserver')
+    setup.handle('Les Rouges')
+    const result = setup.handle(' les rouges ! ')
+    expect(result.snapshot.validatedVoiceNames.A).toBe('Les Rouges')
+    expect(result.snapshot.step).toBe('team-b-display-name')
+  })
+
+  it('redemande seulement le nom vocal A après un échec', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+    setup.handle('Champions')
+    setup.handle('Rouge')
+    const result = setup.handle('Bouge')
+    expect(result.snapshot.step).toBe('team-a-voice-name')
+    expect(result.snapshot.configuration.teamA.displayName).toBe('Champions')
+    expect(result.snapshot.heardTranscript).toBe('Bouge')
+    expect(result.announcement).toBe(
+      'Rouge est mal reconnu. Donnez un autre nom vocal.',
+    )
+  })
+
+  it('applique le même parcours à l’équipe B', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+    advanceTeamA(setup)
     setup.handle('Invincibles')
-    setup.handle('Modifier')
-    const result = setup.handle('Zulu')
-    expect(result.snapshot.configuration.teamB.voiceIdentifier).toBe('Zulu')
+    setup.handle('Bleu')
+    const result = setup.handle('bleu')
+    expect(result.snapshot.configuration.teamB).toEqual({
+      displayName: 'Invincibles',
+      voiceName: 'Bleu',
+    })
+    expect(result.snapshot.validatedVoiceNames.B).toBe('Bleu')
     expect(result.snapshot.step).toBe('server')
   })
 
-  it('ne demande pas le serveur avant les deux identifiants', () => {
+  it('refuse deux noms vocaux identiques', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+    advanceTeamA(setup)
+    setup.handle('Invincibles')
+    const result = setup.handle('ROUGE')
+    expect(result.snapshot.step).toBe('team-b-voice-name')
+    expect(result.snapshot.message).toContain('différents')
+  })
+
+  it.each([
+    'Score',
+    'Corriger',
+    'Nouveau match',
+    'Fin de match',
+    'Confirmer',
+    'Démarrer',
+  ])('refuse la commande réservée « %s » comme nom vocal', (voiceName) => {
     const setup = new VoiceMatchSetup()
     setup.start()
     setup.handle('Champions')
-    setup.handle('Conserver')
-    setup.handle('Invincibles')
-    const result = setup.getSnapshot()
-    expect(result.step).toBe('team-b-identifier-choice')
-    expect(result.prompt).not.toContain('Qui sert')
+    expect(setup.handle(voiceName).snapshot.message).toContain('réservée')
   })
 
-  it('annonce le récapitulatif avant la question du serveur', () => {
-    const result = configureTeams(new VoiceMatchSetup())
-    expect(result.announcement.indexOf('Équipe A')).toBeLessThan(
-      result.announcement.indexOf('Qui sert'),
+  it.each(['Annuler', 'Recommencer'])(
+    'refuse « %s » comme nom vocal dans le formulaire',
+    (voiceName) => {
+      expect(validateVoiceName(voiceName)).toContain('réservée')
+    },
+  )
+
+  it('refuse une expression vocale de plus de trois mots', () => {
+    expect(validateVoiceName('les très grands champions')).toContain(
+      'maximum 3 mots',
     )
   })
 
-  it('utilise les identifiants réellement configurés dans la question serveur', () => {
+  it('ne demande le serveur qu’après les deux validations', () => {
     const setup = new VoiceMatchSetup()
     setup.start()
-    setup.handle('Champions')
-    setup.handle('Modifier')
-    setup.handle('Tango')
+    advanceTeamA(setup)
     setup.handle('Invincibles')
-    setup.handle('Conserver')
-    expect(setup.getSnapshot().prompt).toBe('Qui sert : Tango ou Bravo ?')
+    setup.handle('Bleu')
+    expect(setup.getSnapshot().step).toBe('team-b-validation')
+    expect(setup.handle('Bleu').snapshot.step).toBe('server')
   })
 
-  it('sélectionne le serveur par identifiant exact', () => {
-    const result = reachConfirmation(new VoiceMatchSetup())
-    expect(result.snapshot.configuration.servingTeam).toBe('B')
-    expect(result.announcement).toBe(
-      'Service Bravo. Dites Démarrer ou Recommencer.',
-    )
-  })
-
-  it('Recommencer réinitialise formulaire et dialogue', () => {
+  it('une modification manuelle du nom vocal invalide sa validation', () => {
     const setup = new VoiceMatchSetup()
-    reachConfirmation(setup)
-    const result = setup.handle('Recommencer')
-    expect(result.snapshot.step).toBe('team-a-name')
-    expect(result.snapshot.configuration.teamA.displayName).toBe('Équipe A')
-    expect(result.snapshot.configuration.teamA.voiceIdentifier).toBe('Alpha')
+    setup.start()
+    advanceTeamA(setup)
+    const configuration = setup.getSnapshot().configuration
+    configuration.teamA.voiceName = 'Tango'
+    setup.synchronizeConfiguration(configuration)
+    expect(setup.getSnapshot().validatedVoiceNames.A).toBeNull()
   })
 
-  it('Annuler quitte avec une configuration cohérente', () => {
-    const setup = new VoiceMatchSetup()
-    reachAChoice(setup)
-    const result = setup.handle('Annuler')
-    expect(result.cancelled).toBe(true)
-    expect(result.snapshot.configuration.teamA.displayName).toBe(
-      'Les Champions',
-    )
-  })
-
-  it('Démarrer retourne exactement la configuration affichée', () => {
-    const setup = new VoiceMatchSetup()
-    reachConfirmation(setup)
-    const before = setup.getSnapshot().configuration
-    const result = setup.handle('Démarrer')
-    expect(result.completedConfiguration).toEqual(before)
-  })
-})
-
-describe('validateMatchConfiguration', () => {
-  it('maintient le fonctionnement du formulaire manuel', () => {
+  it('vérifie les noms vocaux validés contre le formulaire visible', () => {
+    const configuration = {
+      teamA: { displayName: 'Champions', voiceName: 'Rouge' },
+      teamB: { displayName: 'Invincibles', voiceName: 'Bleu' },
+      servingTeam: 'A' as const,
+    }
     expect(
-      validateMatchConfiguration({
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'B',
-      }),
-    ).toBeNull()
+      areVoiceNamesValidated(configuration, { A: 'Rouge', B: 'Bleu' }),
+    ).toBe(true)
+    configuration.teamA.voiceName = 'Tango'
+    expect(
+      areVoiceNamesValidated(configuration, { A: 'Rouge', B: 'Bleu' }),
+    ).toBe(false)
+  })
+
+  it('valide la configuration complète', () => {
+    const configuration = createDefaultMatchConfiguration()
+    expect(validateMatchConfiguration(configuration)).toContain('obligatoire')
+    configuration.teamA.voiceName = 'Rouge'
+    configuration.teamB.voiceName = 'Bleu'
+    expect(validateMatchConfiguration(configuration)).toBeNull()
   })
 })

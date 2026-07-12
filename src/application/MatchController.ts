@@ -25,6 +25,10 @@ import {
 import { parseSpokenPointScore } from './parseSpokenPointScore'
 import { GameSession, type GameSessionSnapshot } from './GameSession'
 import {
+  ConnectionQualityMonitor,
+  type ConnectionQualitySnapshot,
+} from './ConnectionQualityMonitor'
+import {
   ConversationEngine,
   type ConversationSnapshot,
 } from './ConversationEngine'
@@ -35,6 +39,7 @@ import {
   validateMatchConfiguration,
 } from './matchConfiguration'
 import {
+  areVoiceNamesValidated,
   VoiceMatchSetup,
   type VoiceMatchSetupSnapshot,
 } from './VoiceMatchSetup'
@@ -86,6 +91,7 @@ export interface MatchControllerSnapshot {
   recognitionAttemptId: number | null
   recognitionLifecycle: string
   session: GameSessionSnapshot
+  connectionQuality: ConnectionQualitySnapshot
 }
 
 export interface StartMatchOptions {
@@ -134,6 +140,8 @@ export class MatchController {
   private editingRevision = 0
   private readonly voiceSetup = new VoiceMatchSetup()
   private readonly waitingVoiceEntry = new WaitingVoiceEntry()
+  private readonly connectionQuality = new ConnectionQualityMonitor()
+  private recognitionListeningStartedAt: number | null = null
   private voiceSetupSnapshot: VoiceMatchSetupSnapshot | null = null
   private lastExecutedVoiceCommand: { transcript: string; at: number } | null =
     null
@@ -196,14 +204,21 @@ export class MatchController {
       recognitionAttemptId: this.pendingRecognitionAttempt,
       recognitionLifecycle: this.recognitionLifecycle,
       session: this.session.getSnapshot(),
+      connectionQuality: this.connectionQuality.getSnapshot(),
     }
   }
 
   subscribe(listener: Listener): () => void {
     this.disposed = false
     this.listeners.add(listener)
+    const unsubscribeConnection = this.connectionQuality.subscribe(() =>
+      this.emit(),
+    )
     listener(this.getSnapshot())
-    return () => this.listeners.delete(listener)
+    return () => {
+      unsubscribeConnection()
+      this.listeners.delete(listener)
+    }
   }
 
   startMatch(options: StartMatchOptions): boolean {
@@ -254,6 +269,19 @@ export class MatchController {
     }
     this.emit()
     return true
+  }
+
+  startConfiguredMatch(options: StartMatchOptions): boolean {
+    const validatedNames = this.voiceSetupSnapshot?.validatedVoiceNames ?? {
+      A: null,
+      B: null,
+    }
+    if (!areVoiceNamesValidated(options.configuration, validatedNames)) {
+      this.message = 'Les deux noms vocaux doivent être validés.'
+      this.emit()
+      return false
+    }
+    return this.startMatch(options)
   }
 
   async startVoiceSetup(feedbackMode: FeedbackMode = 'NONE'): Promise<void> {
@@ -315,6 +343,12 @@ export class MatchController {
     result: SpeechTranscript,
     sourceRevision = this.editingRevision,
   ): Promise<void> {
+    if (this.recognitionListeningStartedAt !== null) {
+      this.connectionQuality.recordRecognitionDelay(
+        this.now() - this.recognitionListeningStartedAt,
+      )
+      this.recognitionListeningStartedAt = null
+    }
     if (this.phase === 'setup') {
       this.lastTranscript = result.transcript
       const waitingResult = this.waitingVoiceEntry.interpret(result.transcript)
@@ -438,10 +472,10 @@ export class MatchController {
 
     const state = this.engine.getState()
     const normalizedA = normalizeSpeech(
-      this.configuration?.teamA.voiceIdentifier ?? state.teams.A,
+      this.configuration?.teamA.voiceName ?? state.teams.A,
     )
     const normalizedB = normalizeSpeech(
-      this.configuration?.teamB.voiceIdentifier ?? state.teams.B,
+      this.configuration?.teamB.voiceName ?? state.teams.B,
     )
 
     if (normalized === normalizedA) {
@@ -694,6 +728,7 @@ export class MatchController {
     this.synthesis.cancel()
     this.feedback.dispose()
     this.readinessCue.dispose()
+    this.connectionQuality.dispose()
     this.listeners.clear()
   }
 
@@ -965,6 +1000,7 @@ export class MatchController {
         this.pendingRecognitionAttempt = null
         this.recognitionStartRetry = 0
         this.recognitionLifecycle = `Erreur réelle : ${code}`
+        if (code === 'network') this.connectionQuality.recordNetworkError()
         if (code === 'no-speech') {
           this.message = message
         } else {
@@ -1041,6 +1077,7 @@ export class MatchController {
       this.recognitionRetryFallback = null
     }
     this.microphoneStatus = 'listening'
+    this.recognitionListeningStartedAt = this.now()
     this.recognitionLifecycle = `onstart reçu pour la tentative ${attemptId}`
     const intents = this.conversation.handleSpeechStarted()
     const expectsResponse = intents.some(

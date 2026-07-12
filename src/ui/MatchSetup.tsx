@@ -42,7 +42,7 @@ export function MatchSetup({
       <h2 id="setup-title">Configurer le match</h2>
       <form onSubmit={submit}>
         <label>
-          Nom équipe A
+          Nom affiché équipe A
           <input
             value={configuration.teamA.displayName}
             onChange={(event) =>
@@ -58,15 +58,15 @@ export function MatchSetup({
           />
         </label>
         <label>
-          Identifiant vocal équipe A
+          Nom vocal équipe A
           <input
-            value={configuration.teamA.voiceIdentifier}
+            value={configuration.teamA.voiceName}
             onChange={(event) =>
               onConfigurationChange({
                 ...configuration,
                 teamA: {
                   ...configuration.teamA,
-                  voiceIdentifier: event.target.value,
+                  voiceName: event.target.value,
                 },
               })
             }
@@ -74,7 +74,7 @@ export function MatchSetup({
           />
         </label>
         <label>
-          Nom équipe B
+          Nom affiché équipe B
           <input
             value={configuration.teamB.displayName}
             onChange={(event) =>
@@ -90,15 +90,15 @@ export function MatchSetup({
           />
         </label>
         <label>
-          Identifiant vocal équipe B
+          Nom vocal équipe B
           <input
-            value={configuration.teamB.voiceIdentifier}
+            value={configuration.teamB.voiceName}
             onChange={(event) =>
               onConfigurationChange({
                 ...configuration,
                 teamB: {
                   ...configuration.teamB,
-                  voiceIdentifier: event.target.value,
+                  voiceName: event.target.value,
                 },
               })
             }

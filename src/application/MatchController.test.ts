@@ -8,6 +8,19 @@ import type {
   SynthesisAdapter,
 } from '../voice/speechTypes'
 import { MatchController } from './MatchController'
+import type { MatchConfiguration } from './matchConfiguration'
+
+function matchConfiguration(
+  A: string,
+  B: string,
+  servingTeam: 'A' | 'B' = 'A',
+): MatchConfiguration {
+  return {
+    teamA: { displayName: A, voiceName: A },
+    teamB: { displayName: B, voiceName: B },
+    servingTeam,
+  }
+}
 
 class MockRecognition implements RecognitionAdapter {
   startCount = 0
@@ -124,11 +137,7 @@ function createController(
 ) {
   const controller = new MatchController(recognition, synthesis)
   controller.startMatch({
-    configuration: {
-      teamA: { displayName: 'Lynx', voiceIdentifier: 'Lynx' },
-      teamB: { displayName: 'Orques', voiceIdentifier: 'Orques' },
-      servingTeam: 'A',
-    },
+    configuration: matchConfiguration('Lynx', 'Orques'),
   })
   return { controller, recognition, synthesis }
 }
@@ -142,11 +151,7 @@ function createFeedbackController(
   const feedback = new MockFeedback()
   const controller = new MatchController(recognition, synthesis, feedback, now)
   controller.startMatch({
-    configuration: {
-      teamA: { displayName: 'Alpha', voiceIdentifier: 'Alpha' },
-      teamB: { displayName: 'Bravo', voiceIdentifier: 'Bravo' },
-      servingTeam: 'A',
-    },
+    configuration: matchConfiguration('Alpha', 'Bravo'),
     feedbackMode: mode,
   })
   return { controller, recognition, synthesis, feedback }
@@ -187,11 +192,7 @@ describe('MatchController', () => {
 
     expect(
       controller.startMatch({
-        configuration: {
-          teamA: { displayName: 'Score', voiceIdentifier: 'Score' },
-          teamB: { displayName: 'Orques', voiceIdentifier: 'Orques' },
-          servingTeam: 'A',
-        },
+        configuration: matchConfiguration('Score', 'Orques'),
       }),
     ).toBe(false)
     expect(controller.getSnapshot().phase).toBe('setup')
@@ -391,11 +392,7 @@ describe('MatchController', () => {
         new MockSynthesis(),
       )
       controller.startMatch({
-        configuration: {
-          teamA: { displayName: 'Champion', voiceIdentifier: 'Champion' },
-          teamB: { displayName: 'Baltringue', voiceIdentifier: 'Baltringue' },
-          servingTeam: 'A',
-        },
+        configuration: matchConfiguration('Champion', 'Baltringue'),
       })
 
       await controller.handleTranscript({ transcript })
@@ -435,11 +432,7 @@ describe('MatchController', () => {
       new MockSynthesis(),
     )
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champion', voiceIdentifier: 'Champion' },
-        teamB: { displayName: 'Baltringue', voiceIdentifier: 'Baltringue' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champion', 'Baltringue'),
     })
 
     await controller.handleTranscript({ transcript: 'Corrige Champion' })
@@ -908,44 +901,45 @@ describe('MatchController', () => {
 })
 
 describe('MatchController configuration', () => {
-  it('utilise les identifiants vocaux pour attribuer les points', async () => {
+  it('utilise uniquement le nom vocal comme commande de point', async () => {
     const controller = new MatchController(
       new MockRecognition(),
       new MockSynthesis(),
     )
     controller.startMatch({
       configuration: {
-        teamA: { displayName: 'Les Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Les Invincibles', voiceIdentifier: 'Bravo' },
+        teamA: { displayName: 'Champions', voiceName: 'Rouge' },
+        teamB: { displayName: 'Invincibles', voiceName: 'Bleu' },
         servingTeam: 'B',
       },
     })
-    await controller.handleTranscript({ transcript: 'Alpha' })
-    await controller.handleTranscript({ transcript: 'Bravo' })
-    const snapshot = controller.getSnapshot()
-    expect(snapshot.display.teams.A.name).toBe('Les Champions')
-    expect(snapshot.display.teams.A.points).toBe('15')
-    expect(snapshot.display.teams.B.points).toBe('15')
-    expect(snapshot.display.teams.B.isServing).toBe(true)
+    await controller.handleTranscript({ transcript: 'Champions' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+    await controller.handleTranscript({ transcript: 'Rouge' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+    await controller.handleTranscript({ transcript: 'Bleu' })
+    expect(controller.getSnapshot().display.teams.B.points).toBe('15')
+    expect(controller.getSnapshot().display.teams.B.isServing).toBe(true)
   })
 
-  it('n’attribue pas de point avec le nom affiché distinct', async () => {
+  it('refuse le démarrage tant que les noms vocaux ne sont pas validés', () => {
     const controller = new MatchController(
       new MockRecognition(),
       new MockSynthesis(),
     )
-    controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Les Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Les Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
-    })
-    await controller.handleTranscript({ transcript: 'Les Champions' })
-    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+    expect(
+      controller.startConfiguredMatch({
+        configuration: {
+          teamA: { displayName: 'Champions', voiceName: 'Rouge' },
+          teamB: { displayName: 'Invincibles', voiceName: 'Bleu' },
+          servingTeam: 'A',
+        },
+      }),
+    ).toBe(false)
+    expect(controller.getSnapshot().phase).toBe('setup')
   })
 
-  it('mène le parcours vocal jusqu’au démarrage du match', async () => {
+  it('mène le parcours vocal avec validation exacte jusqu’au match', async () => {
     const controller = new MatchController(
       new MockRecognition(),
       new MockSynthesis(),
@@ -953,21 +947,26 @@ describe('MatchController configuration', () => {
     await controller.startVoiceSetup()
     for (const transcript of [
       'Champions',
-      'Conserver',
+      'Rouge',
+      'Rouge',
       'Invincibles',
-      'Conserver',
-      'Bravo',
+      'Bleu',
+      'Bleu',
+      'Bleu',
       'Démarrer',
     ]) {
       await controller.handleTranscript({ transcript })
     }
     const snapshot = controller.getSnapshot()
     expect(snapshot.phase).toBe('match')
-    expect(snapshot.configuration?.teamA.voiceIdentifier).toBe('Alpha')
+    expect(snapshot.configuration?.teamA).toEqual({
+      displayName: 'Champions',
+      voiceName: 'Rouge',
+    })
     expect(snapshot.display.teams.B.isServing).toBe(true)
   })
 
-  it('synchronise immédiatement les valeurs vocales avec la configuration éditée', async () => {
+  it('affiche immédiatement le nom vocal candidat', async () => {
     const controller = new MatchController(
       new MockRecognition(),
       new MockSynthesis(),
@@ -977,34 +976,23 @@ describe('MatchController configuration', () => {
     expect(
       controller.getSnapshot().editingConfiguration.teamA.displayName,
     ).toBe('Les Baltringues')
-
-    await controller.handleTranscript({ transcript: 'Modifier' })
-    expect(
-      controller.getSnapshot().editingConfiguration.teamA.voiceIdentifier,
-    ).toBe('Alpha')
-    await controller.handleTranscript({ transcript: 'Tango' })
-    expect(
-      controller.getSnapshot().editingConfiguration.teamA.voiceIdentifier,
-    ).toBe('Tango')
   })
 
-  it('conserve une modification manuelle récente pendant le dialogue vocal', async () => {
+  it('une modification manuelle invalide la validation vocale', async () => {
     const controller = new MatchController(
       new MockRecognition(),
       new MockSynthesis(),
     )
     await controller.startVoiceSetup()
     await controller.handleTranscript({ transcript: 'Champions' })
+    await controller.handleTranscript({ transcript: 'Rouge' })
+    await controller.handleTranscript({ transcript: 'Rouge' })
     const edited = controller.getSnapshot().editingConfiguration
-    edited.teamB.voiceIdentifier = 'Zulu'
+    edited.teamA.voiceName = 'Tango'
     controller.updateEditingConfiguration(edited)
-    await controller.handleTranscript({ transcript: 'Conserver' })
-    await controller.handleTranscript({ transcript: 'Invincibles' })
-    await controller.handleTranscript({ transcript: 'Conserver' })
-
-    expect(controller.getSnapshot().voiceSetup?.prompt).toBe(
-      'Qui sert : Alpha ou Zulu ?',
-    )
+    expect(
+      controller.getSnapshot().voiceSetup?.validatedVoiceNames.A,
+    ).toBeNull()
   })
 
   it('ignore une transcription d’une ancienne session après une modification manuelle', async () => {
@@ -1027,32 +1015,12 @@ describe('MatchController configuration', () => {
     )
   })
 
-  it('démarre avec l’identifiant manuel courant et ignore l’ancien', async () => {
-    const controller = new MatchController(
-      new MockRecognition(),
-      new MockSynthesis(),
-    )
-    const edited = controller.getSnapshot().editingConfiguration
-    edited.teamA.displayName = 'Champions'
-    edited.teamB.displayName = 'Invincibles'
-    edited.teamA.voiceIdentifier = 'Tango'
-    controller.updateEditingConfiguration(edited)
-    controller.startMatch({
-      configuration: controller.getSnapshot().editingConfiguration,
-    })
-
-    await controller.handleTranscript({ transcript: 'Alpha' })
-    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
-    await controller.handleTranscript({ transcript: 'Tango' })
-    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
-  })
-
   it('conserve une modification manuelle du serveur au démarrage', () => {
     const controller = new MatchController(
       new MockRecognition(),
       new MockSynthesis(),
     )
-    const edited = controller.getSnapshot().editingConfiguration
+    const edited = matchConfiguration('Champions', 'Invincibles')
     edited.servingTeam = 'B'
     controller.updateEditingConfiguration(edited)
     controller.startMatch({
@@ -1137,11 +1105,7 @@ describe('MatchController configuration', () => {
       readiness,
     )
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
       feedbackMode: 'BEEP',
     })
 
@@ -1161,11 +1125,7 @@ describe('MatchController configuration', () => {
       readiness,
     )
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
     })
     await controller.handleTranscript({ transcript: 'Alpha' })
     expect(readiness.playCount).toBe(0)
@@ -1184,11 +1144,7 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
       readiness,
     )
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
     })
     const snapshot = controller.getSnapshot()
     expect(snapshot.conversation.state).toBe('STARTING_LISTENING')
@@ -1201,11 +1157,7 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     const recognition = new MockRecognition(true, false)
     const controller = new MatchController(recognition, new MockSynthesis())
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
     })
     recognition.handlers?.onStart()
     await Promise.resolve()
@@ -1217,11 +1169,7 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     const recognition = new MockRecognition(true, false)
     const controller = new MatchController(recognition, new MockSynthesis())
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
     })
     controller.enableListening()
     expect(recognition.startCount).toBe(1)
@@ -1232,11 +1180,7 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     const recognition = new MockRecognition(true, false)
     const controller = new MatchController(recognition, new MockSynthesis())
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
     })
     const oldHandlers = recognition.handlers
     vi.advanceTimersByTime(1_500)
@@ -1254,11 +1198,7 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     const recognition = new MockRecognition(true, false)
     const controller = new MatchController(recognition, new MockSynthesis())
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
     })
     vi.advanceTimersByTime(3_200)
     expect(controller.getSnapshot().message).toBe(
@@ -1273,11 +1213,7 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     const recognition = new MockRecognition(true, false)
     const controller = new MatchController(recognition, new MockSynthesis())
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
     })
     recognition.handlers?.onStart()
     await Promise.resolve()
@@ -1292,11 +1228,7 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     const recognition = new MockRecognition(true, false)
     const controller = new MatchController(recognition, new MockSynthesis())
     controller.startMatch({
-      configuration: {
-        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
-        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
-        servingTeam: 'A',
-      },
+      configuration: matchConfiguration('Champions', 'Invincibles'),
     })
     recognition.handlers?.onError(
       'unknown',
@@ -1388,7 +1320,9 @@ describe('MatchController session de jeu', () => {
     expect(recognition.startCount).toBe(1)
     await controller.handleTranscript({ transcript: 'Nouveau match' })
     expect(controller.getSnapshot().phase).toBe('voice-setup')
-    expect(controller.getSnapshot().voiceSetup?.step).toBe('team-a-name')
+    expect(controller.getSnapshot().voiceSetup?.step).toBe(
+      'team-a-display-name',
+    )
   })
 
   it('ignore silencieusement toute autre parole depuis NOT_STARTED', async () => {

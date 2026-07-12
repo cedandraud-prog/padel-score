@@ -2,61 +2,44 @@ import type { TeamId } from '../core/matchTypes'
 import { ALL_COMMAND_ALIASES } from '../voice/commandAliases'
 import { normalizeSpeech } from '../voice/normalizeSpeech'
 
-export interface TeamConfiguration {
+export interface ConfiguredTeam {
   displayName: string
-  voiceIdentifier: string
+  voiceName: string
 }
 
 export interface MatchConfiguration {
-  teamA: TeamConfiguration
-  teamB: TeamConfiguration
+  teamA: ConfiguredTeam
+  teamB: ConfiguredTeam
   servingTeam: TeamId
 }
 
-export const DEFAULT_VOICE_IDENTIFIERS = { A: 'Alpha', B: 'Bravo' } as const
+const SETUP_COMMANDS = ['demarrer', 'recommencer'] as const
+const RESERVED_VOICE_NAMES = new Set([
+  ...ALL_COMMAND_ALIASES,
+  ...SETUP_COMMANDS,
+])
+const MAX_VOICE_NAME_WORDS = 3
 
 export function createDefaultMatchConfiguration(): MatchConfiguration {
   return {
-    teamA: { displayName: 'Équipe A', voiceIdentifier: 'Alpha' },
-    teamB: { displayName: 'Équipe B', voiceIdentifier: 'Bravo' },
+    teamA: { displayName: 'Équipe A', voiceName: '' },
+    teamB: { displayName: 'Équipe B', voiceName: '' },
     servingTeam: 'A',
   }
 }
 
-export const SETUP_COMMANDS = [
-  'demarrer',
-  'recommencer',
-  'conserver',
-  'nouveau match',
-] as const
+export function validateDisplayName(value: string): string | null {
+  return value.trim() ? null : 'Le nom affiché est obligatoire.'
+}
 
-const RESERVED_IDENTIFIERS = new Set([
-  ...ALL_COMMAND_ALIASES,
-  ...SETUP_COMMANDS,
-])
-
-export function validateVoiceIdentifier(
-  value: string,
-  otherIdentifier: string,
-  displayNames: readonly string[],
-): string | null {
+export function validateVoiceName(value: string): string | null {
   const normalized = normalizeSpeech(value)
-  if (!normalized) return 'L’identifiant vocal est obligatoire.'
-  if (normalized.length > 40 || normalized.split(' ').length > 3) {
-    return 'L’identifiant vocal doit être un mot ou une expression courte.'
+  if (!normalized) return 'Le nom vocal est obligatoire.'
+  if (normalized.split(' ').length > MAX_VOICE_NAME_WORDS) {
+    return `Le nom vocal doit contenir au maximum ${MAX_VOICE_NAME_WORDS} mots.`
   }
-  if (RESERVED_IDENTIFIERS.has(normalized)) {
-    return 'Cet identifiant vocal est une commande réservée.'
-  }
-  if (otherIdentifier && normalized === normalizeSpeech(otherIdentifier)) {
-    return 'Les identifiants vocaux doivent être différents.'
-  }
-  if (
-    displayNames.some(
-      (displayName) => normalized === normalizeSpeech(displayName),
-    )
-  ) {
-    return 'Cet identifiant vocal crée une ambiguïté avec un nom affiché.'
+  if (RESERVED_VOICE_NAMES.has(normalized)) {
+    return 'Ce nom vocal est une commande réservée.'
   }
   return null
 }
@@ -64,23 +47,21 @@ export function validateVoiceIdentifier(
 export function validateMatchConfiguration(
   configuration: MatchConfiguration,
 ): string | null {
-  const nameA = normalizeSpeech(configuration.teamA.displayName)
-  const nameB = normalizeSpeech(configuration.teamB.displayName)
-  if (!nameA || !nameB) return 'Les deux noms d’équipe sont obligatoires.'
-  if (nameA === nameB) return 'Les noms d’équipe doivent être différents.'
-
-  return (
-    validateVoiceIdentifier(
-      configuration.teamA.voiceIdentifier,
-      configuration.teamB.voiceIdentifier,
-      [configuration.teamB.displayName],
-    ) ??
-    validateVoiceIdentifier(
-      configuration.teamB.voiceIdentifier,
-      configuration.teamA.voiceIdentifier,
-      [configuration.teamA.displayName],
-    )
-  )
+  const displayErrorA = validateDisplayName(configuration.teamA.displayName)
+  if (displayErrorA) return displayErrorA
+  const voiceErrorA = validateVoiceName(configuration.teamA.voiceName)
+  if (voiceErrorA) return voiceErrorA
+  const displayErrorB = validateDisplayName(configuration.teamB.displayName)
+  if (displayErrorB) return displayErrorB
+  const voiceErrorB = validateVoiceName(configuration.teamB.voiceName)
+  if (voiceErrorB) return voiceErrorB
+  if (
+    normalizeSpeech(configuration.teamA.voiceName) ===
+    normalizeSpeech(configuration.teamB.voiceName)
+  ) {
+    return 'Les noms vocaux doivent être différents.'
+  }
+  return null
 }
 
 export function copyMatchConfiguration(

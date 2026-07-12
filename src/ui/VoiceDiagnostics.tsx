@@ -16,6 +16,7 @@ const microphoneLabels = {
 
 export function VoiceDiagnostics({ snapshot }: VoiceDiagnosticsProps) {
   const recognition = snapshot.recognitionDiagnostics
+  const connection = snapshot.connectionQuality
 
   return (
     <details
@@ -23,6 +24,44 @@ export function VoiceDiagnostics({ snapshot }: VoiceDiagnosticsProps) {
       open={snapshot.microphoneStatus === 'error'}
     >
       <summary>Diagnostic vocal</summary>
+      <p>
+        Connexion Chrome : <strong>{connection.quality}</strong>
+        <br />
+        État :{' '}
+        {connection.online === null
+          ? 'indisponible'
+          : connection.online
+            ? 'En ligne'
+            : 'Hors ligne'}
+        <br />
+        Réseau : {connection.effectiveType ?? 'indisponible'}
+        <br />
+        RTT estimé :{' '}
+        {connection.rtt === null ? 'indisponible' : `${connection.rtt} ms`}
+        <br />
+        Débit descendant :{' '}
+        {connection.downlink === null
+          ? 'indisponible'
+          : `${connection.downlink} Mb/s`}
+        <br />
+        Délai médian de reconnaissance :{' '}
+        {connection.medianRecognitionDelay === null
+          ? 'indisponible'
+          : `${connection.medianRecognitionDelay} ms`}
+        <br />
+        Dernière erreur :{' '}
+        {connection.recentNetworkErrors ? 'erreur réseau détectée' : 'aucune'}
+        {connection.quality === 'FAIBLE' && (
+          <>
+            <br />
+            Conseil : utilisez un partage 4G/5G
+          </>
+        )}
+        <br />
+        <small>
+          Indice estimé — ne mesure pas directement le signal Wi-Fi.
+        </small>
+      </p>
       <dl>
         <div>
           <dt>Microphone</dt>

@@ -43,16 +43,16 @@ Ouvrir ensuite l’adresse locale indiquée par Vite dans le navigateur.
 
 1. Ouvrir l’application avec Google Chrome.
 2. Autoriser l’accès au microphone lorsque Chrome le demande.
-3. Saisir les deux noms affichés et leurs identifiants vocaux (Alpha et Bravo par défaut), ou sélectionner **Configurer à la voix**.
+3. Saisir, pour chaque équipe, le nom affiché et le nom vocal, ou sélectionner **Configurer à la voix**.
 4. Choisir l’équipe au service.
 5. Choisir le feedback de commande : bip court, voix « OK » ou aucun.
 6. Sélectionner **Démarrer le match**.
 
-Les identifiants vocaux sont comparés exactement après normalisation. Ils doivent être distincts, courts et ne pas correspondre à une commande réservée.
+Le nom affiché est libre. Le nom vocal distinct sert de commande pendant le match et n’est jamais proposé automatiquement. Le parcours guidé suit directement : nom affiché, nom vocal, puis test après le bip. Seule une correspondance exacte après normalisation valide le nom vocal. Les noms vocaux doivent être courts, distincts et différents des commandes réservées. Une modification manuelle d’un nom vocal invalide son test et impose une nouvelle validation avant le démarrage.
 
 ### Commandes vocales
 
-- identifiant vocal exact de l’équipe A ou B : attribuer un point et annoncer le score ;
+- nom vocal exact de l’équipe A ou B : attribuer un point et annoncer le score ;
 - `Score` : annoncer uniquement les points sans modifier le score ;
 - `Score complet` : annoncer les sets, les jeux et les points ;
 - `Annule` : annuler la dernière action ;
@@ -90,6 +90,7 @@ Le feedback est joué uniquement pour une commande vocale finale, valide et rée
 
 - la Web Speech API dépend de sa disponibilité dans Chrome et peut nécessiter une connexion réseau ;
 - la qualité dépend du microphone, du bruit du terrain et de la prononciation ;
+- l’indice de connexion combine uniquement les informations exposées par Chrome et les erreurs ou délais observés ; il ne mesure pas directement la puissance du signal Wi-Fi ;
 - seules les correspondances exactes après normalisation sont acceptées ;
 - les transcriptions dont la confiance exploitable est inférieure à 65 % sont ignorées ; une valeur absente, non finie ou égale à zéro déclenche uniquement la correspondance exacte ;
 - la correction vocale concerne uniquement les points ; le formulaire PC reste disponible en secours ;

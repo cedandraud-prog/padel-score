@@ -17,6 +17,12 @@ Chaque composant matériel ou logiciel devra pouvoir être remplacé indépendam
 
 Aucun backend ni mécanisme de persistance n’est implémenté.
 
+## Configuration et connexion
+
+`MatchConfiguration` contient, pour chaque équipe, un nom affiché et un nom vocal distinct, ainsi que le serveur initial. `VoiceMatchSetup` suit le parcours direct nom affiché → nom vocal → test exact et propose des modifications du draft unique détenu par le contrôleur. Toute modification manuelle reste prioritaire ; modifier un nom vocal invalide sa validation. `MatchController` interprète les noms vocaux, tandis que le `ScoreEngine` reçoit seulement les noms affichés.
+
+`ConnectionQualityMonitor` observe indépendamment l’état en ligne, les mesures éventuellement exposées par la Network Information API et les erreurs ou délais remontés par la reconnaissance. Il produit un indice qualitatif sans dépendre du `ConversationEngine` et sans prétendre mesurer le signal Wi-Fi. L’absence de cette API est un état pris en charge.
+
 ## Session et format
 
 `GameSession` porte les états `NOT_STARTED`, `IN_PROGRESS` et `FINISHED`. `MatchFormat` est une politique explicite du `ScoreEngine` : `REGULAR_MATCH` applique le meilleur des trois sets, tandis que `FREE_PLAY` poursuit les sets sans vainqueur global. Le MLP utilise `FREE_PLAY` et seule la session décide de la clôture globale.

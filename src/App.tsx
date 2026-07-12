@@ -42,7 +42,7 @@ export default function App() {
     configuration: MatchConfiguration,
     feedbackMode: FeedbackMode,
   ) => {
-    controller.startMatch({ configuration, feedbackMode })
+    controller.startConfiguredMatch({ configuration, feedbackMode })
   }
 
   return (
