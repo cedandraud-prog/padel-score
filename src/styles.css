@@ -1,30 +1,275 @@
 :root {
-  font-family: system-ui, sans-serif;
-  color: #f7f7f2;
-  background: #10261f;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #f4f7f5;
+  background: #0b1814;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
-body {
-  margin: 0;
-}
-main {
-  min-height: 100vh;
-  display: grid;
-  place-content: center;
-  gap: 1rem;
-  padding: 2rem;
-  text-align: center;
+
+* {
   box-sizing: border-box;
 }
-h1,
-p {
+
+body {
   margin: 0;
+  min-width: 900px;
 }
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: 1px solid #678079;
+  border-radius: 0.5rem;
+  padding: 0.7rem 1rem;
+  color: #f4f7f5;
+  background: #21352f;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #2c4940;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.primary {
+  color: #07110e;
+  background: #a8f0c6;
+  border-color: #a8f0c6;
+  font-weight: 700;
+}
+
+.app-shell {
+  width: min(1100px, calc(100% - 4rem));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
 h1 {
-  font-size: clamp(2.5rem, 10vw, 6rem);
+  margin-bottom: 0;
+  font-size: 2rem;
   letter-spacing: 0.08em;
 }
-.promise {
-  font-size: clamp(1.25rem, 4vw, 2rem);
+
+.panel,
+.scoreboard,
+.status-panel,
+.controls,
+.diagnostics {
+  border: 1px solid #345149;
+  border-radius: 0.75rem;
+  background: #10231d;
+}
+
+.panel {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+form {
+  display: grid;
+  gap: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 650;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #678079;
+  border-radius: 0.45rem;
+  padding: 0.7rem;
+  color: #f4f7f5;
+  background: #0a1713;
+}
+
+fieldset {
+  display: flex;
+  gap: 1.5rem;
+  border: 1px solid #345149;
+  border-radius: 0.45rem;
+  padding: 0.8rem;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.choice input {
+  width: auto;
+}
+
+.scoreboard {
+  position: relative;
+  overflow: hidden;
+}
+
+.scoreboard-header,
+.team-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) 120px 120px 200px;
+  align-items: center;
+}
+
+.scoreboard-header {
+  padding: 0.7rem 1.4rem;
+  color: #afc0ba;
+  background: #172b25;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+}
+
+.team-row {
+  min-height: 150px;
+  padding: 1rem 1.4rem;
+  border-top: 1px solid #345149;
+  font-size: 2.25rem;
+}
+
+.team-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-row strong span {
+  color: #a8f0c6;
+}
+
+.team-row--winner {
+  background: #173c2d;
+}
+
+.points {
+  font-size: 4.5rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.badge,
+.winner {
+  position: absolute;
+  right: 1rem;
+  margin: 0;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  color: #07110e;
+  background: #a8f0c6;
+  font-weight: 800;
+}
+
+.badge {
+  top: 3.2rem;
+}
+
+.winner {
+  bottom: 1rem;
+}
+
+.status-panel,
+.controls,
+.diagnostics {
+  margin-top: 1rem;
+  padding: 1rem;
+}
+
+.status-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.status-panel p {
+  margin-bottom: 0;
+}
+
+.microphone {
+  font-weight: 750;
+}
+
+.microphone span {
+  color: #82928d;
+}
+
+.microphone--listening span {
+  color: #5ee98f;
+}
+
+.microphone--speaking span {
+  color: #ffce6a;
+}
+
+.microphone--error span,
+.error,
+.message {
+  color: #ff9b93;
+}
+
+.controls,
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.diagnostics summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.diagnostics dl {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 0;
+}
+
+.diagnostics dl div {
+  padding: 0.75rem;
+  background: #0b1814;
+}
+
+.diagnostics dt {
+  color: #afc0ba;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.diagnostics dd {
+  margin: 0.3rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.correction-panel {
+  margin-top: 1rem;
 }
