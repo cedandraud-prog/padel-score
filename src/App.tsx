@@ -3,21 +3,27 @@ import {
   MatchController,
   type MatchControllerSnapshot,
 } from './application/MatchController'
-import type { TeamId, TeamNames } from './core/matchTypes'
+import type { MatchConfiguration } from './application/matchConfiguration'
 import { CorrectionPanel } from './ui/CorrectionPanel'
 import { MatchScreen } from './ui/MatchScreen'
 import { MatchSetup } from './ui/MatchSetup'
 import { SpeechRecognitionService } from './voice/SpeechRecognitionService'
 import { SpeechSynthesisService } from './voice/SpeechSynthesisService'
+import { CommandFeedbackService } from './voice/CommandFeedbackService'
+import { ReadinessCueService } from './voice/ReadinessCueService'
+import type { FeedbackMode } from './voice/speechTypes'
 
 export default function App() {
-  const [controller] = useState(
-    () =>
-      new MatchController(
-        new SpeechRecognitionService(),
-        new SpeechSynthesisService(),
-      ),
-  )
+  const [controller] = useState(() => {
+    const synthesis = new SpeechSynthesisService()
+    return new MatchController(
+      new SpeechRecognitionService(),
+      synthesis,
+      new CommandFeedbackService(synthesis),
+      undefined,
+      new ReadinessCueService(),
+    )
+  })
   const [snapshot, setSnapshot] = useState<MatchControllerSnapshot>(() =>
     controller.getSnapshot(),
   )
@@ -30,8 +36,11 @@ export default function App() {
     }
   }, [controller])
 
-  const startMatch = (teamNames: TeamNames, servingTeam: TeamId) => {
-    controller.startMatch({ teamNames, servingTeam })
+  const startMatch = (
+    configuration: MatchConfiguration,
+    feedbackMode: FeedbackMode,
+  ) => {
+    controller.startMatch({ configuration, feedbackMode })
   }
 
   return (
@@ -41,8 +50,19 @@ export default function App() {
         <p>Vous jouez. Le système se souvient.</p>
       </header>
 
-      {snapshot.phase === 'setup' ? (
-        <MatchSetup message={snapshot.message} onStart={startMatch} />
+      {snapshot.phase === 'setup' || snapshot.phase === 'voice-setup' ? (
+        <MatchSetup
+          message={snapshot.message}
+          configuration={snapshot.editingConfiguration}
+          voiceSetup={snapshot.voiceSetup}
+          onConfigurationChange={(configuration) =>
+            controller.updateEditingConfiguration(configuration)
+          }
+          onStart={startMatch}
+          onVoiceSetup={(feedbackMode) =>
+            void controller.startVoiceSetup(feedbackMode)
+          }
+        />
       ) : (
         <>
           <MatchScreen

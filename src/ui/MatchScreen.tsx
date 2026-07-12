@@ -63,13 +63,15 @@ export function MatchScreen({
           <span aria-hidden="true">●</span>{' '}
           {snapshot.microphoneStatus === 'listening'
             ? 'Microphone en écoute'
-            : snapshot.microphoneStatus === 'speaking'
-              ? 'Annonce en cours — écoute suspendue'
-              : snapshot.microphoneStatus === 'unavailable'
-                ? 'Reconnaissance indisponible'
-                : snapshot.microphoneStatus === 'error'
-                  ? 'Erreur microphone'
-                  : 'Microphone désactivé'}
+            : snapshot.microphoneStatus === 'starting'
+              ? 'Démarrage de l’écoute'
+              : snapshot.microphoneStatus === 'speaking'
+                ? 'Annonce en cours — écoute suspendue'
+                : snapshot.microphoneStatus === 'unavailable'
+                  ? 'Reconnaissance indisponible'
+                  : snapshot.microphoneStatus === 'error'
+                    ? 'Erreur microphone'
+                    : 'Microphone désactivé'}
         </p>
         {snapshot.message && (
           <p className="message" role="alert">

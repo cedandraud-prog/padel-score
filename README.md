@@ -43,15 +43,16 @@ Ouvrir ensuite l’adresse locale indiquée par Vite dans le navigateur.
 
 1. Ouvrir l’application avec Google Chrome.
 2. Autoriser l’accès au microphone lorsque Chrome le demande.
-3. Saisir deux noms d’équipes phonétiquement distincts.
+3. Saisir les deux noms affichés et leurs identifiants vocaux (Alpha et Bravo par défaut), ou sélectionner **Configurer à la voix**.
 4. Choisir l’équipe au service.
-5. Sélectionner **Démarrer le match**.
+5. Choisir le feedback de commande : bip court, voix « OK » ou aucun.
+6. Sélectionner **Démarrer le match**.
 
-Les noms vides, identiques après normalisation ou correspondant à une commande réservée sont refusés.
+Les identifiants vocaux sont comparés exactement après normalisation. Ils doivent être distincts, courts et ne pas correspondre à une commande réservée.
 
 ### Commandes vocales
 
-- nom exact de l’équipe A ou B : attribuer un point et annoncer le score ;
+- identifiant vocal exact de l’équipe A ou B : attribuer un point et annoncer le score ;
 - `Score` : annoncer uniquement les points sans modifier le score ;
 - `Score complet` : annoncer les sets, les jeux et les points ;
 - `Annule` : annuler la dernière action ;
@@ -62,6 +63,8 @@ Les noms vides, identiques après normalisation ou correspondant à une commande
 `Reprends écoute` est réservé mais ne peut pas être entendu lorsque l’écoute est coupée. Utiliser le bouton **Activer l’écoute** sur le PC.
 
 Les boutons restent disponibles pour compter, annuler, demander le score, corriger et gérer l’écoute lorsque la reconnaissance est indisponible ou peu fiable.
+
+Le feedback est joué uniquement pour une commande vocale finale, valide et réellement exécutable. Une même commande déjà exécutée puis reçue à nouveau dans les 1 500 ms est ignorée sans feedback ni annonce.
 
 ### Procédure de test manuel
 
@@ -113,6 +116,7 @@ npm run format:check
 ## Documentation
 
 - [Principes produit](docs/PRODUCT_PRINCIPLES.md)
+- [ADR-004 — Configuration vocale guidée](docs/adr/ADR-004-voice-guided-match-setup.md)
 
 ## Structure du projet
 

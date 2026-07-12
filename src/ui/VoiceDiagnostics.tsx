@@ -6,6 +6,7 @@ interface VoiceDiagnosticsProps {
 
 const microphoneLabels = {
   inactive: 'Inactif',
+  starting: 'Démarrage de l’écoute',
   listening: 'Écoute active',
   speaking: 'Annonce en cours',
   disabled: 'Écoute désactivée',
@@ -42,6 +43,22 @@ export function VoiceDiagnostics({ snapshot }: VoiceDiagnosticsProps) {
         <div>
           <dt>Mode conversationnel</dt>
           <dd>{snapshot.conversationStatus}</dd>
+        </div>
+        <div>
+          <dt>État conversationnel</dt>
+          <dd>{snapshot.conversation.state}</dd>
+        </div>
+        <div>
+          <dt>Tentative de démarrage</dt>
+          <dd>{snapshot.recognitionAttemptId ?? '—'}</dd>
+        </div>
+        <div>
+          <dt>Cycle de reconnaissance</dt>
+          <dd>{snapshot.recognitionLifecycle}</dd>
+        </div>
+        <div>
+          <dt>Feedback de commande</dt>
+          <dd>{snapshot.feedbackMode}</dd>
         </div>
         <div>
           <dt>Transcription normalisée</dt>

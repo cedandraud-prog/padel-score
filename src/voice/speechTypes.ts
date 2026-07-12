@@ -33,6 +33,7 @@ export function usableRecognitionConfidence(
 }
 
 export interface RecognitionHandlers {
+  onStart(): void
   onDiagnostic(diagnostics: RecognitionResultDiagnostics): void
   onResult(result: SpeechTranscript): void
   onError(code: VoiceErrorCode, message: string): void
@@ -50,4 +51,18 @@ export interface SynthesisAdapter {
   readonly isSupported: boolean
   speak(text: string): Promise<void>
   cancel(): void
+}
+
+export type FeedbackMode = 'BEEP' | 'OK' | 'NONE'
+
+export interface CommandFeedbackAdapter {
+  prepare(mode: FeedbackMode): void
+  play(mode: Exclude<FeedbackMode, 'NONE'>): Promise<void>
+  dispose(): void
+}
+
+export interface ReadinessCueAdapter {
+  prepare(): void
+  play(): Promise<void>
+  dispose(): void
 }

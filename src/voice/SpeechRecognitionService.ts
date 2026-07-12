@@ -37,6 +37,7 @@ interface BrowserSpeechRecognition {
   interimResults: boolean
   maxAlternatives: number
   onresult: ((event: BrowserSpeechResultEvent) => void) | null
+  onstart: (() => void) | null
   onerror: ((event: BrowserSpeechErrorEvent) => void) | null
   onend: (() => void) | null
   start(): void
@@ -96,13 +97,14 @@ export class SpeechRecognitionService implements RecognitionAdapter {
   readonly isSupported: boolean
   private recognition: BrowserSpeechRecognition | null = null
   private active = false
+  private starting = false
 
   constructor() {
     this.isSupported = recognitionConstructor() !== null
   }
 
   start(handlers: RecognitionHandlers): void {
-    if (this.active) return
+    if (this.active || this.starting) return
     const Recognition = recognitionConstructor()
     if (!Recognition) {
       handlers.onError(
@@ -112,15 +114,14 @@ export class SpeechRecognitionService implements RecognitionAdapter {
       return
     }
 
-    if (!this.recognition) {
-      this.recognition = new Recognition()
-      this.recognition.lang = 'fr-FR'
-      this.recognition.continuous = true
-      this.recognition.interimResults = false
-      this.recognition.maxAlternatives = 1
-    }
+    const recognition = new Recognition()
+    this.recognition = recognition
+    recognition.lang = 'fr-FR'
+    recognition.continuous = true
+    recognition.interimResults = false
+    recognition.maxAlternatives = 1
 
-    this.recognition.onresult = (event) => {
+    recognition.onresult = (event) => {
       const result = event.results[event.resultIndex]
       const alternative = result?.[0]
       if (!result || !alternative) return
@@ -138,19 +139,30 @@ export class SpeechRecognitionService implements RecognitionAdapter {
         confidence: usableRecognitionConfidence(rawConfidence),
       })
     }
-    this.recognition.onerror = (event) => {
+    recognition.onstart = () => {
+      if (this.recognition === recognition) {
+        this.starting = false
+        this.active = true
+      }
+      handlers.onStart()
+    }
+    recognition.onerror = (event) => {
       const error = mapError(event.error)
       if (error.code !== 'aborted') handlers.onError(error.code, error.message)
     }
-    this.recognition.onend = () => {
-      this.active = false
+    recognition.onend = () => {
+      if (this.recognition === recognition) {
+        this.starting = false
+        this.active = false
+      }
       handlers.onEnd()
     }
 
     try {
-      this.active = true
-      this.recognition.start()
+      this.starting = true
+      recognition.start()
     } catch {
+      this.starting = false
       this.active = false
       handlers.onError(
         'unknown',
@@ -160,7 +172,8 @@ export class SpeechRecognitionService implements RecognitionAdapter {
   }
 
   stop(): void {
-    if (!this.recognition || !this.active) return
+    if (!this.recognition || (!this.active && !this.starting)) return
+    this.starting = false
     this.active = false
     this.recognition.abort()
   }
@@ -169,6 +182,7 @@ export class SpeechRecognitionService implements RecognitionAdapter {
     this.stop()
     if (this.recognition) {
       this.recognition.onresult = null
+      this.recognition.onstart = null
       this.recognition.onerror = null
       this.recognition.onend = null
     }

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  CommandFeedbackAdapter,
+  FeedbackMode,
   RecognitionAdapter,
   RecognitionHandlers,
+  ReadinessCueAdapter,
   SynthesisAdapter,
 } from '../voice/speechTypes'
 import { MatchController } from './MatchController'
@@ -12,11 +15,15 @@ class MockRecognition implements RecognitionAdapter {
   disposeCount = 0
   handlers: RecognitionHandlers | null = null
 
-  constructor(readonly isSupported = true) {}
+  constructor(
+    readonly isSupported = true,
+    private readonly autoStart = true,
+  ) {}
 
   start(handlers: RecognitionHandlers): void {
     this.startCount += 1
     this.handlers = handlers
+    if (this.autoStart) handlers.onStart()
   }
 
   stop(): void {
@@ -62,16 +69,87 @@ class DeferredSynthesis extends MockSynthesis {
   }
 }
 
+class MockFeedback implements CommandFeedbackAdapter {
+  plays: Array<Exclude<FeedbackMode, 'NONE'>> = []
+  disposeCount = 0
+
+  prepare(): void {}
+
+  async play(mode: Exclude<FeedbackMode, 'NONE'>): Promise<void> {
+    this.plays.push(mode)
+  }
+
+  dispose(): void {
+    this.disposeCount += 1
+  }
+}
+
+class MockReadinessCue implements ReadinessCueAdapter {
+  playCount = 0
+  prepared = 0
+  disposed = 0
+
+  prepare(): void {
+    this.prepared += 1
+  }
+
+  async play(): Promise<void> {
+    this.playCount += 1
+  }
+
+  dispose(): void {
+    this.disposed += 1
+  }
+}
+
+class DeferredReadinessCue extends MockReadinessCue {
+  private resolveCue: (() => void) | null = null
+
+  override play(): Promise<void> {
+    this.playCount += 1
+    return new Promise((resolve) => {
+      this.resolveCue = resolve
+    })
+  }
+
+  finishCue(): void {
+    this.resolveCue?.()
+    this.resolveCue = null
+  }
+}
+
 function createController(
   recognition = new MockRecognition(),
   synthesis: SynthesisAdapter = new MockSynthesis(),
 ) {
   const controller = new MatchController(recognition, synthesis)
   controller.startMatch({
-    teamNames: { A: 'Lynx', B: 'Orques' },
-    servingTeam: 'A',
+    configuration: {
+      teamA: { displayName: 'Lynx', voiceIdentifier: 'Lynx' },
+      teamB: { displayName: 'Orques', voiceIdentifier: 'Orques' },
+      servingTeam: 'A',
+    },
   })
   return { controller, recognition, synthesis }
+}
+
+function createFeedbackController(
+  mode: FeedbackMode = 'BEEP',
+  now: () => number = () => 1_000,
+  synthesis: SynthesisAdapter = new MockSynthesis(),
+) {
+  const recognition = new MockRecognition()
+  const feedback = new MockFeedback()
+  const controller = new MatchController(recognition, synthesis, feedback, now)
+  controller.startMatch({
+    configuration: {
+      teamA: { displayName: 'Alpha', voiceIdentifier: 'Alpha' },
+      teamB: { displayName: 'Bravo', voiceIdentifier: 'Bravo' },
+      servingTeam: 'A',
+    },
+    feedbackMode: mode,
+  })
+  return { controller, recognition, synthesis, feedback }
 }
 
 describe('MatchController', () => {
@@ -109,8 +187,11 @@ describe('MatchController', () => {
 
     expect(
       controller.startMatch({
-        teamNames: { A: 'Score', B: 'Orques' },
-        servingTeam: 'A',
+        configuration: {
+          teamA: { displayName: 'Score', voiceIdentifier: 'Score' },
+          teamB: { displayName: 'Orques', voiceIdentifier: 'Orques' },
+          servingTeam: 'A',
+        },
       }),
     ).toBe(false)
     expect(controller.getSnapshot().phase).toBe('setup')
@@ -310,8 +391,11 @@ describe('MatchController', () => {
         new MockSynthesis(),
       )
       controller.startMatch({
-        teamNames: { A: 'Champion', B: 'Baltringue' },
-        servingTeam: 'A',
+        configuration: {
+          teamA: { displayName: 'Champion', voiceIdentifier: 'Champion' },
+          teamB: { displayName: 'Baltringue', voiceIdentifier: 'Baltringue' },
+          servingTeam: 'A',
+        },
       })
 
       await controller.handleTranscript({ transcript })
@@ -351,8 +435,11 @@ describe('MatchController', () => {
       new MockSynthesis(),
     )
     controller.startMatch({
-      teamNames: { A: 'Champion', B: 'Baltringue' },
-      servingTeam: 'A',
+      configuration: {
+        teamA: { displayName: 'Champion', voiceIdentifier: 'Champion' },
+        teamB: { displayName: 'Baltringue', voiceIdentifier: 'Baltringue' },
+        servingTeam: 'A',
+      },
     })
 
     await controller.handleTranscript({ transcript: 'Corrige Champion' })
@@ -669,5 +756,552 @@ describe('MatchController', () => {
     expect(controller.getSnapshot().microphoneStatus).toBe('unavailable')
     await controller.awardPoint('A')
     expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+  })
+
+  it('joue un feedback avant une commande équipe valide', async () => {
+    const { controller, feedback } = createFeedbackController()
+
+    await controller.handleTranscript({ transcript: 'Alpha' })
+
+    expect(feedback.plays).toEqual(['BEEP'])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+  })
+
+  it('joue un feedback pour la commande Score valide', async () => {
+    const { controller, feedback } = createFeedbackController('OK')
+
+    await controller.handleTranscript({ transcript: 'Score' })
+
+    expect(feedback.plays).toEqual(['OK'])
+  })
+
+  it('joue un feedback pour Annuler lorsque undo est possible', async () => {
+    const { controller, feedback } = createFeedbackController()
+    await controller.awardPoint('A')
+
+    await controller.handleTranscript({ transcript: 'Annuler' })
+
+    expect(feedback.plays).toEqual(['BEEP'])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+  })
+
+  it('ne joue aucun feedback pour une commande inconnue', async () => {
+    const { controller, feedback } = createFeedbackController()
+
+    await controller.handleTranscript({ transcript: 'Bonjour' })
+
+    expect(feedback.plays).toEqual([])
+  })
+
+  it('ne joue aucun feedback pour une phrase contenant un nom d’équipe', async () => {
+    const { controller, feedback } = createFeedbackController()
+
+    await controller.handleTranscript({ transcript: 'Bien joué Alpha' })
+
+    expect(feedback.plays).toEqual([])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+  })
+
+  it('ne joue aucun feedback pour un résultat intermédiaire', () => {
+    const { recognition, feedback } = createFeedbackController()
+
+    recognition.handlers?.onDiagnostic({
+      rawTranscript: 'Alpha',
+      rawConfidence: 0.9,
+      isFinal: false,
+      resultsLength: 1,
+      resultIndex: 0,
+    })
+
+    expect(feedback.plays).toEqual([])
+  })
+
+  it('ignore un doublon avec un seul feedback et une seule exécution', async () => {
+    let now = 1_000
+    const { controller, feedback, synthesis } = createFeedbackController(
+      'BEEP',
+      () => now,
+    )
+
+    await controller.handleTranscript({ transcript: 'Alpha' })
+    now += 1_000
+    await controller.handleTranscript({ transcript: 'Alpha' })
+
+    expect(feedback.plays).toEqual(['BEEP'])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+    expect(controller.getSnapshot().lastCommand).toBe('Doublon ignoré')
+    expect(controller.getSnapshot().message).toBe('Doublon ignoré.')
+    expect((synthesis as MockSynthesis).spoken).toHaveLength(1)
+  })
+
+  it('réexécute la même commande après plus de 1 500 ms', async () => {
+    let now = 1_000
+    const { controller, feedback } = createFeedbackController('BEEP', () => now)
+
+    await controller.handleTranscript({ transcript: 'Alpha' })
+    now += 1_501
+    await controller.handleTranscript({ transcript: 'Alpha' })
+
+    expect(feedback.plays).toEqual(['BEEP', 'BEEP'])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('30')
+  })
+
+  it('ne mémorise pas une transcription inconnue comme doublon', async () => {
+    const { controller, feedback } = createFeedbackController()
+
+    await controller.handleTranscript({ transcript: 'Bonjour' })
+    await controller.handleTranscript({ transcript: 'Bonjour' })
+
+    expect(feedback.plays).toEqual([])
+    expect(controller.getSnapshot().lastCommand).toBe('Commande inconnue')
+  })
+
+  it('ne joue aucun feedback pour une correction invalide', async () => {
+    const { controller, feedback } = createFeedbackController()
+
+    await controller.handleTranscript({ transcript: 'Corrige demain' })
+
+    expect(feedback.plays).toEqual([])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+  })
+
+  it('joue un seul feedback pour une correction valide', async () => {
+    const { controller, feedback } = createFeedbackController()
+
+    await controller.handleTranscript({ transcript: 'Corrige 30 30' })
+
+    expect(feedback.plays).toEqual(['BEEP'])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('30')
+    expect(controller.getSnapshot().display.teams.B.points).toBe('30')
+  })
+
+  it('ne joue aucun feedback pour une commande reçue pendant une annonce', async () => {
+    const synthesis = new DeferredSynthesis()
+    const { controller, feedback } = createFeedbackController(
+      'BEEP',
+      () => 1_000,
+      synthesis,
+    )
+
+    const firstCommand = controller.handleTranscript({ transcript: 'Alpha' })
+    while (synthesis.spoken.length === 0) await Promise.resolve()
+    await controller.handleTranscript({ transcript: 'Bravo' })
+    synthesis.finishSpeech()
+    await firstCommand
+
+    expect(feedback.plays).toEqual(['BEEP'])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+    expect(controller.getSnapshot().display.teams.B.points).toBe('0')
+  })
+
+  it('désactive totalement le feedback en mode NONE', async () => {
+    const { controller, feedback } = createFeedbackController('NONE')
+
+    await controller.handleTranscript({ transcript: 'Alpha' })
+
+    expect(feedback.plays).toEqual([])
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+  })
+})
+
+describe('MatchController configuration', () => {
+  it('utilise les identifiants vocaux pour attribuer les points', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Les Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Les Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'B',
+      },
+    })
+    await controller.handleTranscript({ transcript: 'Alpha' })
+    await controller.handleTranscript({ transcript: 'Bravo' })
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.display.teams.A.name).toBe('Les Champions')
+    expect(snapshot.display.teams.A.points).toBe('15')
+    expect(snapshot.display.teams.B.points).toBe('15')
+    expect(snapshot.display.teams.B.isServing).toBe(true)
+  })
+
+  it('n’attribue pas de point avec le nom affiché distinct', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Les Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Les Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    await controller.handleTranscript({ transcript: 'Les Champions' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+  })
+
+  it('mène le parcours vocal jusqu’au démarrage du match', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    await controller.startVoiceSetup()
+    for (const transcript of [
+      'Champions',
+      'Conserver',
+      'Invincibles',
+      'Conserver',
+      'Bravo',
+      'Démarrer',
+    ]) {
+      await controller.handleTranscript({ transcript })
+    }
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.phase).toBe('match')
+    expect(snapshot.configuration?.teamA.voiceIdentifier).toBe('Alpha')
+    expect(snapshot.display.teams.B.isServing).toBe(true)
+  })
+
+  it('synchronise immédiatement les valeurs vocales avec la configuration éditée', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    await controller.startVoiceSetup()
+    await controller.handleTranscript({ transcript: 'Les Baltringues' })
+    expect(
+      controller.getSnapshot().editingConfiguration.teamA.displayName,
+    ).toBe('Les Baltringues')
+
+    await controller.handleTranscript({ transcript: 'Modifier' })
+    expect(
+      controller.getSnapshot().editingConfiguration.teamA.voiceIdentifier,
+    ).toBe('Alpha')
+    await controller.handleTranscript({ transcript: 'Tango' })
+    expect(
+      controller.getSnapshot().editingConfiguration.teamA.voiceIdentifier,
+    ).toBe('Tango')
+  })
+
+  it('conserve une modification manuelle récente pendant le dialogue vocal', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    await controller.startVoiceSetup()
+    await controller.handleTranscript({ transcript: 'Champions' })
+    const edited = controller.getSnapshot().editingConfiguration
+    edited.teamB.voiceIdentifier = 'Zulu'
+    controller.updateEditingConfiguration(edited)
+    await controller.handleTranscript({ transcript: 'Conserver' })
+    await controller.handleTranscript({ transcript: 'Invincibles' })
+    await controller.handleTranscript({ transcript: 'Conserver' })
+
+    expect(controller.getSnapshot().voiceSetup?.prompt).toBe(
+      'Qui sert : Alpha ou Zulu ?',
+    )
+  })
+
+  it('ignore une transcription d’une ancienne session après une modification manuelle', async () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    await controller.startVoiceSetup()
+    const staleHandlers = recognition.handlers
+    const edited = controller.getSnapshot().editingConfiguration
+    edited.teamA.displayName = 'Valeur manuelle'
+    controller.updateEditingConfiguration(edited)
+
+    staleHandlers?.onResult({ transcript: 'Valeur vocale tardive' })
+    await Promise.resolve()
+
+    expect(
+      controller.getSnapshot().editingConfiguration.teamA.displayName,
+    ).toBe('Valeur manuelle')
+    expect(controller.getSnapshot().lastCommand).toBe(
+      'Transcription vocale obsolète ignorée',
+    )
+  })
+
+  it('démarre avec l’identifiant manuel courant et ignore l’ancien', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    const edited = controller.getSnapshot().editingConfiguration
+    edited.teamA.displayName = 'Champions'
+    edited.teamB.displayName = 'Invincibles'
+    edited.teamA.voiceIdentifier = 'Tango'
+    controller.updateEditingConfiguration(edited)
+    controller.startMatch({
+      configuration: controller.getSnapshot().editingConfiguration,
+    })
+
+    await controller.handleTranscript({ transcript: 'Alpha' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+    await controller.handleTranscript({ transcript: 'Tango' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+  })
+
+  it('conserve une modification manuelle du serveur au démarrage', () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    const edited = controller.getSnapshot().editingConfiguration
+    edited.servingTeam = 'B'
+    controller.updateEditingConfiguration(edited)
+    controller.startMatch({
+      configuration: controller.getSnapshot().editingConfiguration,
+    })
+    expect(controller.getSnapshot().display.teams.B.isServing).toBe(true)
+  })
+
+  it('Annuler supprime tout état résiduel du dialogue vocal', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    await controller.startVoiceSetup()
+    await controller.handleTranscript({ transcript: 'Annuler' })
+    expect(controller.getSnapshot().phase).toBe('setup')
+    expect(controller.getSnapshot().voiceSetup).toBeNull()
+  })
+
+  it('joue le bip de disponibilité après la synthèse et la reprise de l’écoute', async () => {
+    const recognition = new MockRecognition()
+    const synthesis = new DeferredSynthesis()
+    const readiness = new MockReadinessCue()
+    const controller = new MatchController(
+      recognition,
+      synthesis,
+      undefined,
+      undefined,
+      readiness,
+    )
+
+    const starting = controller.startVoiceSetup()
+    expect(readiness.playCount).toBe(0)
+    synthesis.finishSpeech()
+    await starting
+
+    expect(recognition.startCount).toBeGreaterThan(0)
+    expect(readiness.playCount).toBe(1)
+  })
+
+  it('ignore toute parole reçue avant la fin du bip de disponibilité', async () => {
+    const synthesis = new DeferredSynthesis()
+    const readiness = new DeferredReadinessCue()
+    const controller = new MatchController(
+      new MockRecognition(),
+      synthesis,
+      undefined,
+      undefined,
+      readiness,
+    )
+
+    const starting = controller.startVoiceSetup()
+    synthesis.finishSpeech()
+    while (readiness.playCount === 0) await Promise.resolve()
+    await controller.handleTranscript({ transcript: 'Trop tôt' })
+    expect(
+      controller.getSnapshot().editingConfiguration.teamA.displayName,
+    ).toBe('Équipe A')
+    readiness.finishCue()
+    await starting
+    const captured = controller.handleTranscript({ transcript: 'Champions' })
+    expect(
+      controller.getSnapshot().editingConfiguration.teamA.displayName,
+    ).toBe('Champions')
+    synthesis.finishSpeech()
+    while (readiness.playCount < 2) await Promise.resolve()
+    readiness.finishCue()
+    await captured
+    expect(
+      controller.getSnapshot().editingConfiguration.teamA.displayName,
+    ).toBe('Champions')
+  })
+
+  it('garde le bip de disponibilité indépendant du feedback de commande', async () => {
+    const feedback = new MockFeedback()
+    const readiness = new MockReadinessCue()
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+      feedback,
+      undefined,
+      readiness,
+    )
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+      feedbackMode: 'BEEP',
+    })
+
+    await controller.handleTranscript({ transcript: 'Corrige' })
+
+    expect(feedback.plays).toEqual(['BEEP'])
+    expect(readiness.playCount).toBe(1)
+  })
+
+  it('ne joue aucun bip de disponibilité après une action sans réponse attendue', async () => {
+    const readiness = new MockReadinessCue()
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+      undefined,
+      undefined,
+      readiness,
+    )
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    await controller.handleTranscript({ transcript: 'Alpha' })
+    expect(readiness.playCount).toBe(0)
+  })
+})
+
+describe('MatchController démarrage réel de la reconnaissance', () => {
+  it('reste sans erreur et sans bip avant onstart', () => {
+    const recognition = new MockRecognition(true, false)
+    const readiness = new MockReadinessCue()
+    const controller = new MatchController(
+      recognition,
+      new MockSynthesis(),
+      undefined,
+      undefined,
+      readiness,
+    )
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.conversation.state).toBe('STARTING_LISTENING')
+    expect(snapshot.microphoneStatus).toBe('starting')
+    expect(snapshot.message).not.toContain('Impossible')
+    expect(readiness.playCount).toBe(0)
+  })
+
+  it('onstart passe à PLAYER_LISTENING', async () => {
+    const recognition = new MockRecognition(true, false)
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    recognition.handlers?.onStart()
+    await Promise.resolve()
+    expect(controller.getSnapshot().conversation.state).toBe('PLAYER_LISTENING')
+    expect(controller.getSnapshot().message).toBe('À vous de parler')
+  })
+
+  it('ne relance pas un démarrage déjà en cours', () => {
+    const recognition = new MockRecognition(true, false)
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    controller.enableListening()
+    expect(recognition.startCount).toBe(1)
+  })
+
+  it('ignore le onstart tardif d’une ancienne tentative', async () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition(true, false)
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    const oldHandlers = recognition.handlers
+    vi.advanceTimersByTime(1_500)
+    oldHandlers?.onStart()
+    await Promise.resolve()
+    expect(controller.getSnapshot().recognitionLifecycle).toContain(
+      'onstart obsolète ignoré',
+    )
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('affiche l’échec après deux timeouts sans onstart', () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition(true, false)
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    vi.advanceTimersByTime(3_200)
+    expect(controller.getSnapshot().message).toBe(
+      'Impossible de démarrer la reconnaissance vocale.',
+    )
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('onstart avant le timeout annule tout faux échec', async () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition(true, false)
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    recognition.handlers?.onStart()
+    await Promise.resolve()
+    vi.advanceTimersByTime(3_000)
+    expect(controller.getSnapshot().message).toBe('À vous de parler')
+    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('affiche l’échec uniquement après une erreur réelle', () => {
+    const recognition = new MockRecognition(true, false)
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceIdentifier: 'Alpha' },
+        teamB: { displayName: 'Invincibles', voiceIdentifier: 'Bravo' },
+        servingTeam: 'A',
+      },
+    })
+    recognition.handlers?.onError(
+      'unknown',
+      'Impossible de démarrer la reconnaissance vocale.',
+    )
+    expect(controller.getSnapshot().message).toBe(
+      'Impossible de démarrer la reconnaissance vocale.',
+    )
+    expect(controller.getSnapshot().conversation.state).toBe('ERROR')
   })
 })

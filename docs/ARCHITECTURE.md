@@ -9,4 +9,10 @@ Le projet sépare les responsabilités afin que les règles métier restent ind�
 
 Chaque composant matériel ou logiciel devra pouvoir être remplacé indépendamment. Les dépendances entre couches seront introduites uniquement lorsqu’un cas d’usage validé le nécessitera.
 
-À ce stade, ces répertoires matérialisent seulement les frontières prévues : aucun moteur, service vocal, backend ou mécanisme de persistance n’est implémenté.
+## Conversation Engine
+
+`ConversationEngine` orchestre les tours système/joueur, les modes `MATCH` et `GUIDED`, la disponibilité de l’écoute, le timeout et le bip de disponibilité. Il reçoit des événements conversationnels et produit des intentions indépendantes des adaptateurs.
+
+`MatchController` traduit ces intentions vers la reconnaissance, la synthèse et le bip, puis reste seul responsable des commandes métier et du `ScoreEngine`. Le moteur conversationnel ne dépend ni de React, ni du navigateur, ni des règles du padel.
+
+Aucun backend ni mécanisme de persistance n’est implémenté.
