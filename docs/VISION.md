@@ -1,23 +1,106 @@
 # Vision produit
 
-## Problème
+## Pourquoi
 
-Pendant un match de padel, les joueurs peuvent oublier le score, ne plus savoir où ils en sont ou être en désaccord. Cette charge mentale interrompt le jeu et fait perdre le fil du match.
+Pendant un match de padel, les joueurs peuvent oublier le score, ne plus savoir où ils en sont ou être en désaccord.
+
+Cette charge mentale interrompt le jeu, casse le rythme et fait perdre le fil du match. PADEL SCORE existe pour la supprimer afin que les joueurs restent concentrés sur leur jeu.
 
 ## Solution
 
-Un joueur désigné comme scoreur prononce le nom de l’équipe qui vient de gagner le point. Le système mémorise l’événement, calcule le score, l’affiche et l’annonce.
+Un joueur désigné comme scoreur prononce le nom vocal de l’équipe qui vient de gagner le point.
 
-## Produit cible
+Le système :
 
-PADEL SCORE est un tableau de score sportif intelligent conçu comme un équipement de terrain. Le produit commercial n’est pas une application : l’application web sert à développer et à tester le moteur logiciel ainsi que les interactions avant leur intégration au matériel.
+- mémorise l’événement ;
+- calcule le score ;
+- l’affiche ;
+- l’annonce.
 
-Le tableau doit permettre aux joueurs de consulter le score en moins d’une seconde. Il doit être robuste, visible en plein soleil, très lisible, simple et peu coûteux.
+Les joueurs continuent à jouer sans avoir à mémoriser le score.
+
+## Produit
+
+PADEL SCORE est une plateforme conversationnelle de suivi de match. Son cœur logiciel est indépendant du matériel.
+
+PADEL SCORE conserve le fil du match afin que les joueurs restent concentrés sur leur jeu.
+
+Selon le contexte, il peut fonctionner :
+
+- sur le téléphone d’un joueur ;
+- sur un terrain équipé ;
+- dans un club ;
+- dans une organisation de tournoi.
+
+Le MLP actuel permet de concevoir, tester et valider le cœur du produit avant son déploiement sur les différentes architectures.
+
+## Personas
+
+### Joueur
+
+Mission : jouer sans perdre le fil du match.
+
+Le produit doit être :
+
+- discret ;
+- fiable ;
+- naturel.
+
+Le meilleur PADEL SCORE est celui auquel le joueur ne pense plus pendant le match.
+
+### Club
+
+Mission : toujours connaître l’état des terrains et des matchs.
+
+Le produit doit fournir une vision fiable de l’activité du club sans complexifier son organisation.
 
 ## Promesse
 
-> « Vous jouez. Le système se souvient. »
+> Vous jouez.
+>
+> PADEL SCORE garde le fil du match.
 
-## Principe fondateur
+## Principes fondateurs
 
-PADEL SCORE doit supprimer un effort cognitif sans en créer un nouveau. L’usage doit rester naturel et ne pas détourner les joueurs du match.
+PADEL SCORE ne cherche jamais à attirer l’attention. Son objectif est de devenir presque invisible. Le meilleur PADEL SCORE est celui auquel les joueurs ne pensent plus pendant le match.
+
+Chaque fonctionnalité doit supprimer une charge cognitive sans en créer une nouvelle.
+
+Toute évolution doit répondre à une question simple : aide-t-elle les joueurs à suivre le match ou attire-t-elle simplement l’attention sur le produit ? Les évolutions qui augmentent la complexité sans améliorer réellement l’expérience doivent être rejetées.
+
+Le cœur métier reste indépendant :
+
+- du matériel ;
+- du navigateur ;
+- du moteur de reconnaissance vocale ;
+- du mode de déploiement.
+
+### Évolution par le terrain
+
+Le produit évolue à partir de l’observation réelle des matchs. Les retours terrain priment sur les hypothèses. Les ADR et les Tasks sont la conséquence de ces observations.
+
+## Ce que PADEL SCORE n’est pas
+
+PADEL SCORE n’est pas :
+
+- un coach ;
+- un réseau social ;
+- une IA conversationnelle généraliste ;
+- un produit qui anime le match.
+
+PADEL SCORE est un système discret qui conserve le fil du match.
+
+## Vision à long terme
+
+Le même cœur logiciel pourra être déployé sous plusieurs formes :
+
+- PLAYER ;
+- AFFILIATED CLUB ;
+- PARTNER CLUB ;
+- TOURNAMENT.
+
+Cette vision est détaillée dans [ADR-007 — Stratégie de déploiement](adr/ADR-007-deployment-strategy.md).
+
+## Conclusion
+
+Le joueur vient pour jouer. Le club vient pour gérer. PADEL SCORE sert les deux sans jamais devenir le centre de l’attention.
