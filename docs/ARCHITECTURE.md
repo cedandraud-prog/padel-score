@@ -38,7 +38,26 @@ Aucun backend ni mécanisme de persistance n’est implémenté.
 
 ## Configuration et connexion
 
-`MatchConfiguration` contient, pour chaque équipe, un nom affiché et un nom vocal distinct, ainsi que le serveur initial. `VoiceMatchSetup` suit le parcours direct nom affiché → nom vocal → test exact et propose des modifications du draft unique détenu par le contrôleur. Toute modification manuelle reste prioritaire ; modifier un nom vocal invalide sa validation. `MatchController` interprète les noms vocaux, tandis que le `ScoreEngine` reçoit seulement les noms affichés.
+La configuration cible distingue deux contrats explicites : `PLAYER`, qui
+connaît deux équipes et un serveur au niveau de l'équipe, et `PLAYERS_PLUS`, qui
+connaît quatre joueurs, leurs positions et un serveur individuel.
+`MatchConfiguration` devient une union discriminée par ce mode.
+
+La voix reste l'entrée principale, mais chaque question accepte aussi une saisie
+clavier. Les deux entrées alimentent un unique `MatchConfigurationDraft` détenu
+par le contrôleur. La modification valide la plus récente est prioritaire et une
+transcription tardive ne peut pas écraser une saisie manuelle plus récente.
+
+En `PLAYERS_PLUS`, chaque joueur possède une position `RIGHT` ou `LEFT` dans le
+contexte du match et chaque équipe possède exactement une position de chaque
+type. La position reste indépendante de l'ordre de service.
+
+Le moteur utilise une politique de service adaptée au mode : alternance des
+équipes pour `PLAYER`, cycle individuel des quatre joueurs pour `PLAYERS_PLUS`. Le
+serveur courant et le prochain serveur sont dérivés de cette politique plutôt
+que stockés comme des sources de vérité indépendantes.
+
+Voir [ADR-011 — Modes de jeu et gestion du service](adr/ADR-011-game-modes-and-service-management.md).
 
 `ConnectionQualityMonitor` observe indépendamment l’état en ligne, les mesures éventuellement exposées par la Network Information API et les erreurs ou délais remontés par la reconnaissance. Il produit un indice qualitatif sans dépendre du `ConversationEngine` et sans prétendre mesurer le signal Wi-Fi. L’absence de cette API est un état pris en charge.
 

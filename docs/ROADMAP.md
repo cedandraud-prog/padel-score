@@ -7,6 +7,8 @@
 - **Task 006** — Session de jeu et format FREE_PLAY.
 - **Task 007** — Nom d’équipe unique et indice de connexion Chrome.
 - **Task 007.1** — Nom affiché et consigne vocale distincts avec parcours direct.
+- **ADR-011 / US-006** — Modes PLAYER et PLAYER+, positions droite/gauche,
+  saisie vocale ou clavier et politiques de service distinctes.
 - **CAMP-001** — Validation de l’expérience pendant un vrai match.
 
 ## Trajectoire produit
