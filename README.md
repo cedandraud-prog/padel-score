@@ -43,23 +43,23 @@ Ouvrir ensuite l’adresse locale indiquée par Vite dans le navigateur.
 
 1. Ouvrir l’application avec Google Chrome.
 2. Autoriser l’accès au microphone lorsque Chrome le demande.
-3. Saisir, pour chaque équipe, le nom affiché et le nom vocal, ou sélectionner **Configurer à la voix**.
+3. Saisir, pour chaque équipe, le nom affiché et la consigne vocale, ou sélectionner **Configurer à la voix**.
 4. Choisir l’équipe au service.
 5. Choisir le feedback de commande : bip court, voix « OK » ou aucun.
 6. Sélectionner **Démarrer le match**.
 
-Le nom affiché est libre. Le nom vocal distinct sert de commande pendant le match et n’est jamais proposé automatiquement. Le parcours guidé suit directement : nom affiché, nom vocal, puis test après le bip. Seule une correspondance exacte après normalisation valide le nom vocal. Les noms vocaux doivent être courts, distincts et différents des commandes réservées. Une modification manuelle d’un nom vocal invalide son test et impose une nouvelle validation avant le démarrage.
+Le nom affiché est libre. La consigne vocale distincte sert de commande pendant le match et n’est jamais proposée automatiquement. Le parcours guidé suit directement : nom affiché, consigne vocale, puis test après le bip. Seule une correspondance exacte après normalisation valide la consigne vocale. Les consignes vocales doivent être courtes, distinctes et différentes des commandes réservées. Une modification manuelle d’une consigne vocale invalide son test et impose une nouvelle validation avant le démarrage.
 
 ### Commandes vocales
 
-- nom vocal exact de l’équipe A ou B : attribuer un point et annoncer le score ;
+- consigne vocale exacte de l’équipe A ou B : attribuer un point et annoncer le score ;
 - `Score` : annoncer uniquement les points sans modifier le score ;
 - `Score complet` : annoncer les sets, les jeux et les points ;
 - `Annule` : annuler la dernière action ;
 - `Corrige` / `Corriger` / `Corrigez` : demander vocalement un nouveau score de points ;
 - `Corrige 30 30` : appliquer immédiatement une correction de points en une phrase ;
 - `Termine écoute` : arrêter volontairement la reconnaissance.
-- `Fin de match` : demander la clôture manuelle de la session, puis `Confirmer` ou `Annuler` ;
+- `Fin de match` : demander la clôture manuelle de la session, puis répondre `Oui` ou `Non` ;
 - `Nouveau match` : lancer directement la configuration vocale lorsqu’aucune session n’est en cours.
 
 Le MLP utilise le format `FREE_PLAY` : les sets continuent sans limite et seule la commande confirmée `Fin de match` clôture la session.
@@ -69,6 +69,8 @@ Le MLP utilise le format `FREE_PLAY` : les sets continuent sans limite et seule 
 Les boutons restent disponibles pour compter, annuler, demander le score, corriger et gérer l’écoute lorsque la reconnaissance est indisponible ou peu fiable.
 
 Le feedback est joué uniquement pour une commande vocale finale, valide et réellement exécutable. Une même commande déjà exécutée puis reçue à nouveau dans les 1 500 ms est ignorée sans feedback ni annonce.
+
+Le diagnostic vocal, accessible avec le paramètre `?diagnostics`, inventorie les voix françaises exposées par le navigateur. Il permet de tester et de mémoriser localement une voix sans ajouter ce réglage au parcours normal du joueur. La liste dépend de l’appareil et peut donc différer entre PC et Android.
 
 ### Procédure de test manuel
 

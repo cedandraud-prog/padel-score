@@ -6,6 +6,8 @@ describe('resolveVoiceCommand', () => {
   it.each([
     ['Fin de match', 'FINISH_MATCH'],
     ['Confirmer', 'CONFIRM'],
+    ['Oui', 'CONFIRM'],
+    ['Non', 'DECLINE'],
     ['Nouveau match', 'NEW_MATCH'],
   ])('interprète exactement « %s »', (transcript, type) => {
     expect(resolveVoiceCommand(normalizeSpeech(transcript))).toEqual({ type })

@@ -8,7 +8,10 @@ import type {
   SynthesisAdapter,
 } from '../voice/speechTypes'
 import { MatchController } from './MatchController'
-import type { MatchConfiguration } from './matchConfiguration'
+import {
+  createDefaultMatchConfiguration,
+  type MatchConfiguration,
+} from './matchConfiguration'
 
 function matchConfiguration(
   A: string,
@@ -973,6 +976,46 @@ describe('MatchController configuration', () => {
     expect(snapshot.display.teams.B.isServing).toBe(true)
   })
 
+  it('Recommencer réinitialise le setup sans quitter l’expérience ni doubler l’écoute', async () => {
+    const recognition = new MockRecognition()
+    const synthesis = new MockSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+    await controller.startVoiceSetup()
+    await controller.handleTranscript({ transcript: 'Champions' })
+    await controller.handleTranscript({ transcript: 'Rouge' })
+    const startsBeforeRestart = recognition.startCount
+
+    await controller.handleTranscript({ transcript: 'Recommencer' })
+
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.phase).toBe('voice-setup')
+    expect(snapshot.voiceSetup?.step).toBe('team-a-display-name')
+    expect(snapshot.editingConfiguration).toEqual(
+      createDefaultMatchConfiguration(),
+    )
+    expect(snapshot.experience).toEqual({ stage: 'CONFIGURING', active: true })
+    expect(snapshot.session.state).toBe('NOT_STARTED')
+    expect(snapshot.continuousListening.shouldListen).toBe(true)
+    expect(snapshot.continuousListening.recognitionRunning).toBe(true)
+    expect(recognition.startCount).toBe(startsBeforeRestart + 1)
+    expect(synthesis.spoken.at(-1)).toBe(
+      'D’accord, recommençons la configuration. Nom de la première équipe ?',
+    )
+  })
+
+  it('Recommencer ne modifie pas un match déjà lancé', async () => {
+    const { controller } = createController()
+    await controller.awardPoint('A')
+    const before = controller.getSnapshot()
+
+    await controller.handleTranscript({ transcript: 'Recommencer' })
+
+    const after = controller.getSnapshot()
+    expect(after.phase).toBe('match')
+    expect(after.session).toEqual(before.session)
+    expect(after.display).toEqual(before.display)
+  })
+
   it('affiche immédiatement le nom vocal candidat', async () => {
     const controller = new MatchController(
       new MockRecognition(),
@@ -1497,27 +1540,29 @@ describe('MatchController session de jeu', () => {
     expect(controller.getSnapshot().session.isFinishConfirmationPending).toBe(
       true,
     )
-    expect((synthesis as MockSynthesis).spoken).toContain('Confirmer ?')
+    expect((synthesis as MockSynthesis).spoken).toContain(
+      'Confirmer la fin du match ? Oui ou non ?',
+    )
   })
 
-  it('Annuler reprend la session sans changer le score', async () => {
+  it('Non reprend la session sans changer le score', async () => {
     const { controller } = createController()
     await controller.awardPoint('A')
     const before = controller.getSnapshot().display
     await controller.handleTranscript({ transcript: 'Fin de match' })
-    await controller.handleTranscript({ transcript: 'Annuler' })
+    await controller.handleTranscript({ transcript: 'Non' })
     expect(controller.getSnapshot().phase).toBe('match')
     expect(controller.getSnapshot().session.state).toBe('IN_PROGRESS')
     expect(controller.getSnapshot().display).toEqual(before)
   })
 
-  it('Confirmer termine la session et conserve exactement le score', async () => {
+  it('Oui termine la session et conserve exactement le score', async () => {
     const { controller, synthesis } = createController()
     await controller.awardPoint('A')
     await controller.awardPoint('B')
     const before = controller.getSnapshot().display
     await controller.handleTranscript({ transcript: 'Fin de match' })
-    await controller.handleTranscript({ transcript: 'Confirmer' })
+    await controller.handleTranscript({ transcript: 'Oui' })
     const snapshot = controller.getSnapshot()
     expect(snapshot.session.state).toBe('FINISHED')
     expect(snapshot.phase).toBe('session-finished')
@@ -1525,6 +1570,31 @@ describe('MatchController session de jeu', () => {
     expect((synthesis as MockSynthesis).spoken.at(-1)).toContain(
       'Fin du match.',
     )
+  })
+
+  it('conserve Confirmer comme synonyme de Oui', async () => {
+    const { controller } = createController()
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    await controller.handleTranscript({ transcript: 'Confirmer' })
+    expect(controller.getSnapshot().session.state).toBe('FINISHED')
+  })
+
+  it('conserve Annuler comme synonyme de Non', async () => {
+    const { controller } = createController()
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    await controller.handleTranscript({ transcript: 'Annuler' })
+    expect(controller.getSnapshot().session.state).toBe('IN_PROGRESS')
+    expect(controller.getSnapshot().phase).toBe('match')
+  })
+
+  it('n’interprète pas une commande sportive comme Oui ou Non', async () => {
+    const { controller } = createController()
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    await controller.handleTranscript({ transcript: 'Score' })
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.session.state).toBe('IN_PROGRESS')
+    expect(snapshot.phase).toBe('session-end-confirmation')
+    expect(snapshot.message).toBe('Dites Oui ou Non.')
   })
 
   it('refuse Nouveau match pendant une session en cours', async () => {

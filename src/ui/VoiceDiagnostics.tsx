@@ -1,10 +1,13 @@
+import { useEffect, useState } from 'react'
 import type { MatchControllerSnapshot } from '../application/MatchController'
 import type { ScreenWakeLockSnapshot } from '../application/ScreenWakeLockManager'
 import type { ListeningStrategy } from '../voice/ListeningStrategy'
+import { SpeechSynthesisService } from '../voice/SpeechSynthesisService'
 
 interface VoiceDiagnosticsProps {
   snapshot: MatchControllerSnapshot
   wakeLock: ScreenWakeLockSnapshot
+  synthesis: SpeechSynthesisService
   onStrategyChange(strategy: ListeningStrategy): void
   onReset(): void
 }
@@ -19,9 +22,94 @@ const microphoneLabels = {
   error: 'Erreur microphone',
 } as const
 
+interface VoiceSettingsDiagnosticProps {
+  synthesis: SpeechSynthesisService
+  announcementInProgress?: boolean
+}
+
+export function VoiceSettingsDiagnostic({
+  synthesis,
+  announcementInProgress = false,
+}: VoiceSettingsDiagnosticProps) {
+  const [voices, setVoices] = useState(() => synthesis.getFrenchVoices())
+  const [message, setMessage] = useState('')
+  const currentVoice = synthesis.getCurrentVoice()
+
+  useEffect(
+    () =>
+      synthesis.subscribeToVoiceChanges(() => {
+        setVoices(synthesis.getFrenchVoices())
+      }),
+    [synthesis],
+  )
+
+  const selectVoice = (id: string) => {
+    const saved = synthesis.selectVoice(id || null)
+    setVoices(synthesis.getFrenchVoices())
+    setMessage(
+      saved ? 'Choix mémorisé sur cet appareil.' : 'Choix non mémorisé.',
+    )
+  }
+
+  const testCurrentVoice = async () => {
+    if (!currentVoice) return
+    setMessage('Test en cours…')
+    try {
+      await synthesis.testVoice(currentVoice.id)
+      setMessage('Test terminé.')
+    } catch {
+      setMessage('Impossible de tester cette voix.')
+    }
+  }
+
+  return (
+    <section
+      className="voice-settings-diagnostic"
+      aria-label="Voix des annonces"
+    >
+      <h3>Voix des annonces</h3>
+      {voices.length > 0 ? (
+        <>
+          <label>
+            Voix française utilisée
+            <select
+              value={currentVoice?.id ?? ''}
+              onChange={(event) => selectVoice(event.target.value)}
+            >
+              {voices.map((voice) => (
+                <option value={voice.id} key={voice.id}>
+                  {voice.name} ({voice.lang})
+                  {voice.isDefault ? ' — par défaut' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p>
+            Voix actuelle :{' '}
+            <strong>
+              {currentVoice?.name} ({currentVoice?.lang})
+            </strong>
+          </p>
+          <button
+            type="button"
+            onClick={() => void testCurrentVoice()}
+            disabled={announcementInProgress}
+          >
+            Tester cette voix
+          </button>
+        </>
+      ) : (
+        <p>Aucune voix française signalée par cet appareil.</p>
+      )}
+      {message && <p aria-live="polite">{message}</p>}
+    </section>
+  )
+}
+
 export function VoiceDiagnostics({
   snapshot,
   wakeLock,
+  synthesis,
   onStrategyChange,
   onReset,
 }: VoiceDiagnosticsProps) {
@@ -51,6 +139,10 @@ export function VoiceDiagnostics({
           Remise à zéro
         </button>
       </div>
+      <VoiceSettingsDiagnostic
+        synthesis={synthesis}
+        announcementInProgress={snapshot.microphoneStatus === 'speaking'}
+      />
       <p>
         Connexion Chrome : <strong>{connection.quality}</strong>
         <br />

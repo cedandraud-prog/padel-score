@@ -356,7 +356,7 @@ export class MatchController {
       B: null,
     }
     if (!areVoiceNamesValidated(options.configuration, validatedNames)) {
-      this.message = 'Les deux noms vocaux doivent être validés.'
+      this.message = 'Les deux consignes vocales doivent être validées.'
       this.emit()
       return false
     }
@@ -636,6 +636,7 @@ export class MatchController {
         await this.announce("Le match n'est pas terminé.")
         return
       case 'CONFIRM':
+      case 'DECLINE':
         this.lastCommand = 'Commande inconnue'
         this.message = 'Aucune confirmation n’est attendue.'
         this.emit()
@@ -826,16 +827,16 @@ export class MatchController {
     this.phase = 'session-end-confirmation'
     this.conversation.enterGuidedMode()
     this.lastCommand = 'Fin de match'
-    this.message = 'Confirmer ?'
+    this.message = 'Confirmer la fin du match ? Oui ou non ?'
     this.emit()
-    await this.announce('Confirmer ?', true)
+    await this.announce('Confirmer la fin du match ? Oui ou non ?', true)
   }
 
   private async handleSessionEndConfirmation(
     normalizedTranscript: string,
   ): Promise<void> {
     const command = resolveVoiceCommand(normalizedTranscript)
-    if (command?.type === 'UNDO') {
+    if (command?.type === 'DECLINE' || command?.type === 'UNDO') {
       this.session.cancelFinish()
       this.conversation.manualCancel()
       this.phase = 'match'
@@ -846,7 +847,7 @@ export class MatchController {
     }
     if (command?.type !== 'CONFIRM') {
       this.lastCommand = 'Confirmation attendue'
-      this.message = 'Dites Confirmer ou Annuler.'
+      this.message = 'Dites Oui ou Non.'
       this.emit()
       return
     }

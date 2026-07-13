@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1220" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta
+      name="description"
+      content="Sonde expérimentale isolée pour SPIKE-001."
+    />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>SPIKE-001 — Audio Device Selection</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        color: #f7fafc;
+        background: #0b1220;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+      }
+
+      main {
+        width: min(820px, 100%);
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 8px 0;
+        font-size: clamp(1.8rem, 8vw, 3.5rem);
+        line-height: 1;
+      }
+
+      h2 {
+        margin-top: 0;
+      }
+
+      .warning {
+        color: #ffcf70;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .card {
+        margin: 18px 0;
+        padding: 18px;
+        border: 1px solid #27364e;
+        border-radius: 16px;
+        background: #111b2d;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+
+      button,
+      select {
+        width: 100%;
+        min-height: 48px;
+        margin: 6px 0;
+        padding: 10px 12px;
+        border: 1px solid #3a4d69;
+        border-radius: 10px;
+        color: inherit;
+        background: #17243a;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      button.primary {
+        color: #08101e;
+        background: #63e6be;
+        border-color: #63e6be;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      meter {
+        width: 100%;
+        height: 32px;
+      }
+
+      pre,
+      .device-list {
+        max-height: 320px;
+        overflow: auto;
+        padding: 12px;
+        border-radius: 10px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        background: #08101e;
+      }
+
+      .device {
+        padding: 10px 0;
+        border-bottom: 1px solid #27364e;
+      }
+
+      .device:last-child {
+        border-bottom: 0;
+      }
+
+      .muted {
+        color: #a8b3c7;
+      }
+
+      code {
+        color: #90f5d5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="warning">Expérience isolée — jamais intégrée au produit</p>
+      <h1>Audio Device Selection</h1>
+      <p>
+        Cette sonde compare le flux choisi par <code>getUserMedia()</code> et la
+        source réellement utilisée par <code>SpeechRecognition</code>.
+      </p>
+
+      <section class="card">
+        <h2>Environnement</h2>
+        <pre id="environment"></pre>
+      </section>
+
+      <section class="card">
+        <h2>1. Périphériques</h2>
+        <p class="muted">
+          Autoriser le microphone avant de conclure : les libellés peuvent être
+          masqués tant que la permission n'est pas accordée.
+        </p>
+        <div class="grid">
+          <button class="primary" id="authorize">Autoriser et lister</button>
+          <button id="refresh">Actualiser la liste</button>
+        </div>
+        <div id="devices" class="device-list">Aucun inventaire.</div>
+      </section>
+
+      <section class="card">
+        <h2>2. Flux et vumètre</h2>
+        <label for="audio-input">Microphone demandé</label>
+        <select id="audio-input">
+          <option value="">Périphérique par défaut</option>
+        </select>
+        <div class="grid">
+          <button class="primary" id="start-stream">Démarrer le flux</button>
+          <button id="stop-stream" disabled>Arrêter le flux</button>
+        </div>
+        <meter id="level" min="0" max="1" value="0"></meter>
+        <pre id="track">Aucune piste active.</pre>
+      </section>
+
+      <section class="card">
+        <h2>3. SpeechRecognition</h2>
+        <p>
+          Un appel accepté avec un argument ne prouve pas que Chrome Android
+          utilise la piste. Isolez physiquement les deux micros et comparez les
+          deux essais.
+        </p>
+        <div class="grid">
+          <button id="recognize-track" disabled>
+            Tester start(audioTrack)
+          </button>
+          <button id="recognize-default">Tester start()</button>
+          <button id="stop-recognition" disabled>
+            Arrêter la reconnaissance
+          </button>
+        </div>
+        <pre id="transcript">Aucune transcription.</pre>
+      </section>
+
+      <section class="card">
+        <h2>Rapport</h2>
+        <div class="grid">
+          <button id="copy-report">Copier le rapport</button>
+          <button id="clear-log">Effacer le journal</button>
+        </div>
+        <pre id="log"></pre>
+      </section>
+    </main>
+
+    <script type="module">
+      const $ = (id) => document.getElementById(id)
+      const elements = {
+        environment: $('environment'),
+        devices: $('devices'),
+        audioInput: $('audio-input'),
+        level: $('level'),
+        track: $('track'),
+        transcript: $('transcript'),
+        log: $('log'),
+        stopStream: $('stop-stream'),
+        recognizeTrack: $('recognize-track'),
+        stopRecognition: $('stop-recognition'),
+      }
+
+      let stream = null
+      let audioContext = null
+      let animationFrame = null
+      let recognition = null
+      const events = []
+
+      const displayMode = window.matchMedia('(display-mode: standalone)')
+        .matches
+        ? 'standalone'
+        : 'browser'
+
+      const environment = {
+        timestamp: new Date().toISOString(),
+        displayMode,
+        secureContext: window.isSecureContext,
+        userAgent: navigator.userAgent,
+        mediaDevices: Boolean(navigator.mediaDevices),
+        enumerateDevices: Boolean(navigator.mediaDevices?.enumerateDevices),
+        getUserMedia: Boolean(navigator.mediaDevices?.getUserMedia),
+        speechRecognition: Boolean(
+          window.SpeechRecognition || window.webkitSpeechRecognition,
+        ),
+        online: navigator.onLine,
+      }
+
+      elements.environment.textContent = JSON.stringify(environment, null, 2)
+
+      function log(type, details = {}) {
+        events.push({ timestamp: new Date().toISOString(), type, ...details })
+        elements.log.textContent = events
+          .map((event) => JSON.stringify(event))
+          .join('\n')
+        elements.log.scrollTop = elements.log.scrollHeight
+      }
+
+      log('environment', environment)
+
+      async function stopStream() {
+        if (animationFrame !== null) cancelAnimationFrame(animationFrame)
+        animationFrame = null
+        if (audioContext) await audioContext.close()
+        audioContext = null
+        stream?.getTracks().forEach((track) => track.stop())
+        stream = null
+        elements.level.value = 0
+        elements.track.textContent = 'Aucune piste active.'
+        elements.stopStream.disabled = true
+        elements.recognizeTrack.disabled = true
+        log('media-stream-stopped')
+      }
+
+      async function listDevices() {
+        if (!navigator.mediaDevices?.enumerateDevices) {
+          log('enumerate-devices-unavailable')
+          elements.devices.textContent = 'enumerateDevices() indisponible.'
+          return
+        }
+
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices()
+          const audioDevices = devices.filter((device) =>
+            ['audioinput', 'audiooutput'].includes(device.kind),
+          )
+          const previousSelection = elements.audioInput.value
+          elements.audioInput.innerHTML =
+            '<option value="">Périphérique par défaut</option>'
+          elements.devices.replaceChildren()
+
+          audioDevices.forEach((device, index) => {
+            const item = document.createElement('div')
+            item.className = 'device'
+            item.textContent = [
+              `${device.kind} #${index + 1}`,
+              `label: ${device.label || '(masqué)'}`,
+              `deviceId: ${device.deviceId || '(vide)'}`,
+              `groupId: ${device.groupId || '(vide)'}`,
+            ].join('\n')
+            elements.devices.append(item)
+
+            if (device.kind === 'audioinput') {
+              const option = document.createElement('option')
+              option.value = device.deviceId
+              option.textContent =
+                device.label || `Microphone ${elements.audioInput.length}`
+              elements.audioInput.append(option)
+            }
+          })
+
+          if (audioDevices.length === 0) {
+            elements.devices.textContent = 'Aucun périphérique audio exposé.'
+          }
+
+          if (
+            [...elements.audioInput.options].some(
+              (option) => option.value === previousSelection,
+            )
+          ) {
+            elements.audioInput.value = previousSelection
+          }
+
+          log('devices-enumerated', {
+            devices: audioDevices.map(({ kind, label, deviceId, groupId }) => ({
+              kind,
+              label,
+              deviceId,
+              groupId,
+            })),
+          })
+        } catch (error) {
+          elements.devices.textContent = `${error.name}: ${error.message}`
+          log('enumerate-devices-error', {
+            name: error.name,
+            message: error.message,
+          })
+        }
+      }
+
+      async function authorizeAndList() {
+        try {
+          const permissionStream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          })
+          permissionStream.getTracks().forEach((track) => track.stop())
+          log('microphone-permission-granted')
+          await listDevices()
+        } catch (error) {
+          log('microphone-permission-error', {
+            name: error.name,
+            message: error.message,
+          })
+        }
+      }
+
+      async function startSelectedStream() {
+        await stopStream()
+        const selectedDeviceId = elements.audioInput.value
+        const constraints = {
+          audio: selectedDeviceId
+            ? { deviceId: { exact: selectedDeviceId } }
+            : true,
+        }
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints)
+          const [track] = stream.getAudioTracks()
+          const trackDetails = {
+            requestedDeviceId: selectedDeviceId || 'default',
+            label: track.label,
+            id: track.id,
+            kind: track.kind,
+            enabled: track.enabled,
+            muted: track.muted,
+            readyState: track.readyState,
+            settings: track.getSettings?.() ?? {},
+            capabilities: track.getCapabilities?.() ?? {},
+          }
+          elements.track.textContent = JSON.stringify(trackDetails, null, 2)
+          elements.stopStream.disabled = false
+          elements.recognizeTrack.disabled = false
+          log('media-stream-started', { constraints, track: trackDetails })
+
+          audioContext = new AudioContext()
+          await audioContext.resume()
+          const source = audioContext.createMediaStreamSource(stream)
+          const analyser = audioContext.createAnalyser()
+          analyser.fftSize = 1024
+          source.connect(analyser)
+          const samples = new Uint8Array(analyser.fftSize)
+
+          const updateMeter = () => {
+            analyser.getByteTimeDomainData(samples)
+            const sum = samples.reduce((total, value) => {
+              const centered = (value - 128) / 128
+              return total + centered * centered
+            }, 0)
+            elements.level.value = Math.min(
+              1,
+              Math.sqrt(sum / samples.length) * 4,
+            )
+            animationFrame = requestAnimationFrame(updateMeter)
+          }
+          updateMeter()
+        } catch (error) {
+          elements.track.textContent = `${error.name}: ${error.message}`
+          log('media-stream-error', {
+            constraints,
+            name: error.name,
+            message: error.message,
+          })
+        }
+      }
+
+      function startRecognition(mode) {
+        const Recognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition
+        if (!Recognition) {
+          log('speech-recognition-unavailable')
+          elements.transcript.textContent = 'SpeechRecognition indisponible.'
+          return
+        }
+
+        if (recognition) {
+          log('speech-recognition-already-running')
+          return
+        }
+
+        const track = stream?.getAudioTracks()[0]
+        if (mode === 'audioTrack' && (!track || track.readyState !== 'live')) {
+          log('speech-recognition-no-live-track')
+          return
+        }
+
+        recognition = new Recognition()
+        recognition.lang = 'fr-FR'
+        recognition.continuous = false
+        recognition.interimResults = true
+        recognition.maxAlternatives = 1
+        elements.stopRecognition.disabled = false
+        elements.transcript.textContent = `Essai ${mode} en cours…`
+
+        const speechDetails = {
+          mode,
+          trackLabel: track?.label ?? null,
+          trackId: track?.id ?? null,
+          trackReadyState: track?.readyState ?? null,
+        }
+
+        recognition.onstart = () =>
+          log('speech-recognition-start', speechDetails)
+        recognition.onaudiostart = () =>
+          log('speech-recognition-audio-start', speechDetails)
+        recognition.onresult = (event) => {
+          const results = [...event.results].map((result) => ({
+            transcript: result[0]?.transcript ?? '',
+            confidence: result[0]?.confidence ?? null,
+            isFinal: result.isFinal,
+          }))
+          elements.transcript.textContent = results
+            .map(
+              (result) =>
+                `${result.isFinal ? 'final' : 'intermédiaire'}: ${result.transcript}`,
+            )
+            .join('\n')
+          log('speech-recognition-result', { mode, results })
+        }
+        recognition.onerror = (event) =>
+          log('speech-recognition-error', {
+            mode,
+            error: event.error,
+            message: event.message,
+          })
+        recognition.onend = () => {
+          log('speech-recognition-end', speechDetails)
+          recognition = null
+          elements.stopRecognition.disabled = true
+        }
+
+        try {
+          if (mode === 'audioTrack') recognition.start(track)
+          else recognition.start()
+          log('speech-recognition-start-called', speechDetails)
+        } catch (error) {
+          log('speech-recognition-start-threw', {
+            ...speechDetails,
+            name: error.name,
+            message: error.message,
+          })
+          recognition = null
+          elements.stopRecognition.disabled = true
+        }
+      }
+
+      $('authorize').addEventListener('click', authorizeAndList)
+      $('refresh').addEventListener('click', listDevices)
+      $('start-stream').addEventListener('click', startSelectedStream)
+      $('stop-stream').addEventListener('click', stopStream)
+      $('recognize-track').addEventListener('click', () =>
+        startRecognition('audioTrack'),
+      )
+      $('recognize-default').addEventListener('click', () =>
+        startRecognition('default'),
+      )
+      $('stop-recognition').addEventListener('click', () => {
+        recognition?.abort()
+        log('speech-recognition-abort-requested')
+      })
+      $('clear-log').addEventListener('click', () => {
+        events.length = 0
+        elements.log.textContent = ''
+      })
+      $('copy-report').addEventListener('click', async () => {
+        const report = JSON.stringify({ environment, events }, null, 2)
+        try {
+          await navigator.clipboard.writeText(report)
+          log('report-copied')
+        } catch (error) {
+          log('report-copy-error', {
+            name: error.name,
+            message: error.message,
+          })
+        }
+      })
+
+      navigator.mediaDevices?.addEventListener('devicechange', () => {
+        log('device-change')
+        void listDevices()
+      })
+
+      window.addEventListener('beforeunload', () => {
+        recognition?.abort()
+        stream?.getTracks().forEach((track) => track.stop())
+      })
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker
+          .register('./sw.js', { scope: './' })
+          .then(() => log('service-worker-registered'))
+          .catch((error) =>
+            log('service-worker-error', {
+              name: error.name,
+              message: error.message,
+            }),
+          )
+      }
+
+      void listDevices()
+    </script>
+  </body>
+</html>

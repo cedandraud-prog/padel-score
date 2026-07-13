@@ -98,6 +98,7 @@ h1 {
 .scoreboard,
 .status-panel,
 .controls,
+.voice-command-help,
 .diagnostics {
   border: 1px solid #345149;
   border-radius: 0.75rem;
@@ -110,7 +111,8 @@ h1 {
   padding: 1.5rem;
 }
 
-form {
+form,
+.setup-form {
   display: grid;
   gap: 1rem;
 }
@@ -219,6 +221,7 @@ fieldset {
 
 .status-panel,
 .controls,
+.voice-command-help,
 .diagnostics {
   margin-top: 1rem;
   padding: 1rem;
@@ -264,6 +267,46 @@ fieldset {
   gap: 0.65rem;
 }
 
+.setup-help {
+  margin-bottom: 1.25rem;
+  color: #c4d4cf;
+  line-height: 1.45;
+}
+
+.voice-command-help {
+  color: #c4d4cf;
+}
+
+.voice-command-help summary {
+  cursor: pointer;
+  color: #f4f7f5;
+  font-weight: 700;
+}
+
+.voice-command-help dl {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0 0;
+}
+
+.voice-command-help dl div {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.voice-command-help dt {
+  color: #f4f7f5;
+  font-weight: 750;
+}
+
+.voice-command-help dt::after {
+  content: ' —';
+}
+
+.voice-command-help dd {
+  margin: 0;
+}
+
 .diagnostics summary {
   cursor: pointer;
   font-weight: 700;
@@ -290,6 +333,18 @@ fieldset {
 .diagnostics dd {
   margin: 0.3rem 0 0;
   overflow-wrap: anywhere;
+}
+
+.voice-settings-diagnostic {
+  margin-top: 1rem;
+  border: 1px solid #345149;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: #0b1814;
+}
+
+.voice-settings-diagnostic h3 {
+  margin-top: 0;
 }
 
 .correction-panel {

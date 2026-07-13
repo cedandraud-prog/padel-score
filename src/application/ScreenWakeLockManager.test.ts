@@ -184,7 +184,7 @@ describe('ScreenWakeLockManager', () => {
     expect(manager.getSnapshot().warning).toBeNull()
   })
 
-  it('conserve le même verrou pendant une expérience toujours active', async () => {
+  it('conserve le même verrou quand Recommencer maintient l’expérience active', async () => {
     const { manager, request, sentinels } = createHarness()
     await manager.setExperienceActive(true)
 

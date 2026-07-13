@@ -55,10 +55,12 @@ export class VoiceMatchSetup {
     A: null,
     B: null,
   }
+  private serverRequiresVoiceName = false
 
   start(configuration = createDefaultMatchConfiguration()): VoiceSetupResult {
     this.configuration = copyMatchConfiguration(configuration)
     this.validatedVoiceNames = { A: null, B: null }
+    this.serverRequiresVoiceName = false
     this.step = 'team-a-display-name'
     this.message = ''
     this.heardTranscript = ''
@@ -104,7 +106,7 @@ export class VoiceMatchSetup {
         true,
       )
     }
-    if (normalized === 'recommencer') return this.start(this.configuration)
+    if (normalized === 'recommencer') return this.restart()
 
     switch (this.step) {
       case 'team-a-display-name':
@@ -147,8 +149,16 @@ export class VoiceMatchSetup {
     this.message = ''
     this.heardTranscript = ''
     this.step = team === 'A' ? 'team-a-voice-name' : 'team-b-voice-name'
-    const question = `Nom vocal de l’équipe ${value} ?`
+    const question = `Consigne vocale de l’équipe ${value} ?`
     return this.result(question, question)
+  }
+
+  private restart(): VoiceSetupResult {
+    this.start(createDefaultMatchConfiguration())
+    return this.result(
+      'D’accord, recommençons la configuration. Nom de la première équipe ?',
+      'Dites le nom de la première équipe.',
+    )
   }
 
   private captureVoiceName(team: TeamId, transcript: string): VoiceSetupResult {
@@ -160,7 +170,7 @@ export class VoiceMatchSetup {
       normalizeSpeech(value) ===
       normalizeSpeech(this.configuration[teamKey(other)].voiceName)
     ) {
-      return this.reject('Les noms vocaux doivent être différents.')
+      return this.reject('Les consignes vocales doivent être différentes.')
     }
     this.configuration[teamKey(team)].voiceName = value
     this.validatedVoiceNames[team] = null
@@ -181,33 +191,52 @@ export class VoiceMatchSetup {
       this.validatedVoiceNames[team] = null
       this.step = team === 'A' ? 'team-a-voice-name' : 'team-b-voice-name'
       this.message = `Entendu : « ${this.heardTranscript || 'transcription vide'} ».`
-      const failure = `${candidate} est mal reconnu. Donnez un autre nom vocal.`
+      const failure = `${candidate} est mal reconnu. Donnez une autre consigne vocale.`
       return this.result(failure, failure)
     }
 
     this.validatedVoiceNames[team] = candidate
-    this.message = 'Nom vocal validé'
+    this.message = 'Consigne vocale validée'
     if (team === 'A') {
       this.step = 'team-b-display-name'
       return this.result(
-        'Nom vocal validé. Nom de la deuxième équipe ?',
+        'Consigne vocale validée. Nom de la deuxième équipe ?',
         'Dites le nom de la deuxième équipe.',
       )
     }
     this.step = 'server'
     return this.result(
-      `Nom vocal validé. Qui sert : ${this.configuration.teamA.voiceName} ou ${this.configuration.teamB.voiceName} ?`,
-      `Qui sert : ${this.configuration.teamA.voiceName} ou ${this.configuration.teamB.voiceName} ?`,
+      `Consigne vocale validée. Qui sert : ${this.configuration.teamA.displayName} ou ${this.configuration.teamB.displayName} ?`,
+      `Qui sert : ${this.configuration.teamA.displayName} ou ${this.configuration.teamB.displayName} ?`,
     )
   }
 
   private captureServer(normalized: string): VoiceSetupResult {
-    let servingTeam: TeamId
-    if (normalized === normalizeSpeech(this.configuration.teamA.voiceName))
-      servingTeam = 'A'
-    else if (normalized === normalizeSpeech(this.configuration.teamB.voiceName))
-      servingTeam = 'B'
-    else return this.reject('Dites exactement l’un des deux noms vocaux.')
+    const matches = (['A', 'B'] as const).filter((team) => {
+      const configuredTeam = this.configuration[teamKey(team)]
+      const acceptedNames = this.serverRequiresVoiceName
+        ? [configuredTeam.voiceName]
+        : [configuredTeam.displayName, configuredTeam.voiceName]
+      return acceptedNames.some(
+        (acceptedName) => normalized === normalizeSpeech(acceptedName),
+      )
+    })
+
+    if (matches.length > 1) {
+      this.serverRequiresVoiceName = true
+      return this.reject(
+        `Réponse ambiguë. Dites la consigne vocale exacte : ${this.configuration.teamA.voiceName} ou ${this.configuration.teamB.voiceName}.`,
+      )
+    }
+    if (matches.length === 0) {
+      const expected = this.serverRequiresVoiceName
+        ? `Dites exactement ${this.configuration.teamA.voiceName} ou ${this.configuration.teamB.voiceName}.`
+        : `Dites exactement ${this.configuration.teamA.displayName}, ${this.configuration.teamA.voiceName}, ${this.configuration.teamB.displayName} ou ${this.configuration.teamB.voiceName}.`
+      return this.reject(expected)
+    }
+
+    const servingTeam = matches[0]
+    this.serverRequiresVoiceName = false
     this.configuration.servingTeam = servingTeam
     this.step = 'confirmation'
     return this.result(

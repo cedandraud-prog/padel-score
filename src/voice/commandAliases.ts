@@ -7,6 +7,7 @@ type CommandAliasKey =
   | 'resume-listening'
   | 'finish-match'
   | 'confirm'
+  | 'decline'
   | 'new-match'
 
 export type VoiceCommand =
@@ -19,6 +20,7 @@ export type VoiceCommand =
   | { type: 'RESUME_LISTENING' }
   | { type: 'FINISH_MATCH' }
   | { type: 'CONFIRM' }
+  | { type: 'DECLINE' }
   | { type: 'NEW_MATCH' }
 
 export const COMMAND_ALIASES = {
@@ -29,7 +31,8 @@ export const COMMAND_ALIASES = {
   'stop-listening': ['termine ecoute'],
   'resume-listening': ['reprends ecoute'],
   'finish-match': ['fin de match'],
-  confirm: ['confirmer'],
+  confirm: ['oui', 'confirmer'],
+  decline: ['non'],
   'new-match': ['nouveau match'],
 } as const satisfies Record<CommandAliasKey, readonly string[]>
 
@@ -56,6 +59,7 @@ const EXACT_COMMANDS: ReadonlyArray<{
     command: { type: 'FINISH_MATCH' },
   },
   { aliases: COMMAND_ALIASES.confirm, command: { type: 'CONFIRM' } },
+  { aliases: COMMAND_ALIASES.decline, command: { type: 'DECLINE' } },
   { aliases: COMMAND_ALIASES['new-match'], command: { type: 'NEW_MATCH' } },
 ]
 

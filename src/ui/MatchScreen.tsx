@@ -12,6 +12,21 @@ interface MatchScreenProps {
   onNewMatch(): void
 }
 
+export const MATCH_VOICE_COMMAND_HELP = [
+  {
+    command: 'Annuler',
+    description: 'retire la dernière action.',
+  },
+  {
+    command: 'Corriger',
+    description: 'permet de rectifier les points du jeu en cours.',
+  },
+  {
+    command: 'Fin de match',
+    description: 'demande la clôture du match avec confirmation.',
+  },
+] as const
+
 export function MatchScreen({
   snapshot,
   onPoint,
@@ -114,6 +129,18 @@ export function MatchScreen({
           </button>
         )}
       </section>
+
+      <details className="voice-command-help">
+        <summary>Commandes vocales</summary>
+        <dl>
+          {MATCH_VOICE_COMMAND_HELP.map(({ command, description }) => (
+            <div key={command}>
+              <dt>{command}</dt>
+              <dd>{description}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
     </>
   )
 }

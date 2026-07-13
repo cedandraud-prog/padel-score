@@ -34,12 +34,12 @@ export function validateDisplayName(value: string): string | null {
 
 export function validateVoiceName(value: string): string | null {
   const normalized = normalizeSpeech(value)
-  if (!normalized) return 'Le nom vocal est obligatoire.'
+  if (!normalized) return 'La consigne vocale est obligatoire.'
   if (normalized.split(' ').length > MAX_VOICE_NAME_WORDS) {
-    return `Le nom vocal doit contenir au maximum ${MAX_VOICE_NAME_WORDS} mots.`
+    return `La consigne vocale doit contenir au maximum ${MAX_VOICE_NAME_WORDS} mots.`
   }
   if (RESERVED_VOICE_NAMES.has(normalized)) {
-    return 'Ce nom vocal est une commande réservée.'
+    return 'Cette consigne vocale est une commande réservée.'
   }
   return null
 }
@@ -59,7 +59,7 @@ export function validateMatchConfiguration(
     normalizeSpeech(configuration.teamA.voiceName) ===
     normalizeSpeech(configuration.teamB.voiceName)
   ) {
-    return 'Les noms vocaux doivent être différents.'
+    return 'Les consignes vocales doivent être différentes.'
   }
   return null
 }

@@ -3,7 +3,6 @@ import {
   MatchController,
   type MatchControllerSnapshot,
 } from './application/MatchController'
-import type { MatchConfiguration } from './application/matchConfiguration'
 import { CorrectionPanel } from './ui/CorrectionPanel'
 import { MatchScreen } from './ui/MatchScreen'
 import { MatchSetup } from './ui/MatchSetup'
@@ -12,7 +11,6 @@ import { SpeechRecognitionService } from './voice/SpeechRecognitionService'
 import { SpeechSynthesisService } from './voice/SpeechSynthesisService'
 import { CommandFeedbackService } from './voice/CommandFeedbackService'
 import { ReadinessCueService } from './voice/ReadinessCueService'
-import type { FeedbackMode } from './voice/speechTypes'
 import { ScreenWakeLockManager } from './application/ScreenWakeLockManager'
 import { WakeLockWarning } from './ui/WakeLockWarning'
 import { browserListeningStrategyStore } from './voice/ListeningStrategy'
@@ -23,17 +21,18 @@ const diagnosticsEnabled = new URLSearchParams(window.location.search).has(
 )
 
 export default function App() {
-  const [controller] = useState(() => {
-    const synthesis = new SpeechSynthesisService()
-    return new MatchController(
-      new SpeechRecognitionService(),
-      synthesis,
-      new CommandFeedbackService(synthesis),
-      undefined,
-      new ReadinessCueService(),
-      strategyStore.load(),
-    )
-  })
+  const [synthesis] = useState(() => new SpeechSynthesisService())
+  const [controller] = useState(
+    () =>
+      new MatchController(
+        new SpeechRecognitionService(),
+        synthesis,
+        new CommandFeedbackService(synthesis),
+        undefined,
+        new ReadinessCueService(),
+        strategyStore.load(),
+      ),
+  )
   const [snapshot, setSnapshot] = useState<MatchControllerSnapshot>(() =>
     controller.getSnapshot(),
   )
@@ -67,13 +66,6 @@ export default function App() {
     [wakeLockManager],
   )
 
-  const startMatch = (
-    configuration: MatchConfiguration,
-    feedbackMode: FeedbackMode,
-  ) => {
-    controller.startConfiguredMatch({ configuration, feedbackMode })
-  }
-
   return (
     <main className="app-shell">
       <header>
@@ -98,7 +90,6 @@ export default function App() {
               onConfigurationChange={(configuration) =>
                 controller.updateEditingConfiguration(configuration)
               }
-              onStart={startMatch}
               onVoiceSetup={(feedbackMode) =>
                 void controller.startNewMatchVoiceSetup(feedbackMode)
               }
@@ -137,6 +128,7 @@ export default function App() {
         <VoiceDiagnostics
           snapshot={snapshot}
           wakeLock={wakeLockSnapshot}
+          synthesis={synthesis}
           onStrategyChange={(strategy) => {
             strategyStore.save(strategy)
             controller.setListeningStrategy(strategy)

@@ -1,8 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import {
-  type MatchConfiguration,
-  validateMatchConfiguration,
-} from '../application/matchConfiguration'
+import { useState } from 'react'
+import type { MatchConfiguration } from '../application/matchConfiguration'
 import type { VoiceMatchSetupSnapshot } from '../application/VoiceMatchSetup'
 import type { FeedbackMode } from '../voice/speechTypes'
 
@@ -11,7 +8,6 @@ interface MatchSetupProps {
   configuration: MatchConfiguration
   voiceSetup: VoiceMatchSetupSnapshot | null
   onConfigurationChange(configuration: MatchConfiguration): void
-  onStart(configuration: MatchConfiguration, feedbackMode: FeedbackMode): void
   onVoiceSetup(feedbackMode: FeedbackMode): void
 }
 
@@ -20,27 +16,19 @@ export function MatchSetup({
   configuration,
   voiceSetup,
   onConfigurationChange,
-  onStart,
   onVoiceSetup,
 }: MatchSetupProps) {
   const [feedbackMode, setFeedbackMode] = useState<FeedbackMode>('BEEP')
-  const [validationMessage, setValidationMessage] = useState('')
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault()
-    const error = validateMatchConfiguration(configuration)
-    if (error) {
-      setValidationMessage(error)
-      return
-    }
-    setValidationMessage('')
-    onStart(configuration, feedbackMode)
-  }
 
   return (
     <section className="panel setup-panel" aria-labelledby="setup-title">
       <h2 id="setup-title">Configurer le match</h2>
-      <form onSubmit={submit}>
+      <p className="setup-help">
+        Dites <strong>« Nouveau match »</strong> pour lancer la configuration
+        vocale. Dites <strong>« Recommencer »</strong> pour effacer la
+        configuration en cours et reprendre depuis le début.
+      </p>
+      <div className="setup-form">
         <label>
           Nom affiché équipe A
           <input
@@ -58,7 +46,7 @@ export function MatchSetup({
           />
         </label>
         <label>
-          Nom vocal équipe A
+          Consigne vocale équipe A
           <input
             value={configuration.teamA.voiceName}
             onChange={(event) =>
@@ -90,7 +78,7 @@ export function MatchSetup({
           />
         </label>
         <label>
-          Nom vocal équipe B
+          Consigne vocale équipe B
           <input
             value={configuration.teamB.voiceName}
             onChange={(event) =>
@@ -143,14 +131,11 @@ export function MatchSetup({
             <option value="NONE">Aucun</option>
           </select>
         </label>
-        {(validationMessage || message) && (
+        {message && (
           <p className="error" role="alert">
-            {validationMessage || message}
+            {message}
           </p>
         )}
-        <button type="submit" className="primary">
-          Démarrer le match
-        </button>
         <button
           type="button"
           onClick={() => onVoiceSetup(feedbackMode)}
@@ -158,7 +143,7 @@ export function MatchSetup({
         >
           Configurer à la voix
         </button>
-      </form>
+      </div>
       {voiceSetup && (
         <div aria-live="polite">
           <h3>Configuration vocale</h3>
