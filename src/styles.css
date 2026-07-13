@@ -105,7 +105,7 @@ h1 {
 .scoreboard,
 .status-panel,
 .controls,
-.voice-command-guide,
+.voice-command-help,
 .diagnostics {
   border: 1px solid #345149;
   border-radius: 0.75rem;
@@ -282,6 +282,14 @@ form,
   color: #f4f7f5;
   font-weight: 750;
   overflow-wrap: anywhere;
+}
+
+.setup-voice-help {
+  margin: 0.35rem 0 0;
+  color: #82928d;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .editable-team-name {
@@ -465,6 +473,21 @@ fieldset {
   font-weight: 800;
 }
 
+.next-server {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin: 0;
+  border-top: 1px solid #345149;
+  padding: 0.75rem 1.4rem;
+  color: #afc0ba;
+  background: #0b1814;
+}
+
+.next-server strong {
+  color: #a8f0c6;
+}
+
 .badge {
   top: 3.2rem;
 }
@@ -475,7 +498,7 @@ fieldset {
 
 .status-panel,
 .controls,
-.voice-command-guide,
+.voice-command-help,
 .diagnostics {
   margin-top: 1rem;
   padding: 1rem;
@@ -534,37 +557,38 @@ fieldset {
   background: #35211f;
 }
 
-.voice-command-guide {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
+.voice-command-help {
   color: #c4d4cf;
 }
 
-.voice-command-guide > span {
-  color: #82928d;
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.voice-command-guide ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.voice-command-guide li {
-  border: 1px solid #345149;
-  border-radius: 999px;
-  padding: 0.3rem 0.65rem;
+.voice-command-help summary {
+  cursor: pointer;
   color: #f4f7f5;
-  background: #0b1814;
   font-weight: 700;
+}
+
+.voice-command-help dl {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0 0;
+}
+
+.voice-command-help dl div {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.voice-command-help dt {
+  color: #f4f7f5;
+  font-weight: 750;
+}
+
+.voice-command-help dt::after {
+  content: ' —';
+}
+
+.voice-command-help dd {
+  margin: 0;
 }
 
 .diagnostics summary {
@@ -725,9 +749,8 @@ fieldset {
     flex-direction: column;
   }
 
-  .voice-command-guide {
-    align-items: flex-start;
-    flex-direction: column;
+  .next-server {
+    padding-inline: 0.75rem;
   }
 
   .editable-team-name-form {

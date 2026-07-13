@@ -7,6 +7,12 @@ const snapshot = {
   phase: 'match',
   microphoneStatus: 'listening',
   recognitionAvailable: true,
+  conversation: { isRunning: true },
+  configuration: {
+    teamA: { displayName: 'Champions', voiceName: 'Rouge' },
+    teamB: { displayName: 'Invincibles', voiceName: 'Bleu' },
+    servingTeam: 'A',
+  },
   message: '',
   session: { state: 'IN_PROGRESS' },
   display: {
@@ -38,9 +44,15 @@ const snapshot = {
 describe('MatchScreen', () => {
   it('affiche uniquement les commandes vocales supportées prévues par la Task', () => {
     expect(MATCH_VOICE_COMMAND_HELP.map(({ command }) => command)).toEqual([
+      'Score',
+      'Score complet',
       'Annuler',
       'Corriger',
+      'Serveur',
       'Fin de match',
+      'Oui',
+      'Non',
+      'Termine écoute',
     ])
 
     const html = renderToStaticMarkup(
@@ -58,10 +70,13 @@ describe('MatchScreen', () => {
       />,
     )
 
-    expect(html).toContain('aria-label="Commandes vocales"')
-    for (const { command } of MATCH_VOICE_COMMAND_HELP) {
+    expect(html).toContain('<summary>Consignes vocales</summary>')
+    for (const { command, description } of MATCH_VOICE_COMMAND_HELP) {
       expect(html).toContain(command)
+      expect(html).toContain(description)
     }
+    expect(html).toContain('<dt>Rouge</dt>')
+    expect(html).toContain('<dt>Bleu</dt>')
     expect(html).not.toContain('Recommencer')
   })
 
@@ -87,5 +102,30 @@ describe('MatchScreen', () => {
     expect(html).toContain('aria-label="Champions est au service"')
     expect(html).toContain('aria-label="Donner le service à Invincibles"')
     expect(html).toContain('Modifier le nom affiché de Champions')
+    expect(html).toContain('Prochain service <strong>Champions</strong>')
+    expect(html).toContain('Désactiver l’écoute')
+  })
+
+  it('propose de réactiver une écoute suspendue', () => {
+    const html = renderToStaticMarkup(
+      <MatchScreen
+        snapshot={{
+          ...snapshot,
+          microphoneStatus: 'disabled',
+          conversation: { ...snapshot.conversation, isRunning: false },
+        }}
+        onPoint={() => undefined}
+        onUndo={() => undefined}
+        onScore={() => undefined}
+        onFullScore={() => undefined}
+        onCorrect={() => undefined}
+        onToggleListening={() => undefined}
+        onNewMatch={() => undefined}
+        onDisplayNameChange={() => undefined}
+        onServingTeamChange={() => undefined}
+      />,
+    )
+
+    expect(html).toContain('Réactiver l’écoute')
   })
 })

@@ -17,6 +17,14 @@ interface MatchScreenProps {
 
 export const MATCH_VOICE_COMMAND_HELP = [
   {
+    command: 'Score',
+    description: 'annonce les points.',
+  },
+  {
+    command: 'Score complet',
+    description: 'annonce sets, jeux, points et prochain service.',
+  },
+  {
     command: 'Annuler',
     description: 'retire la dernière action.',
   },
@@ -25,8 +33,24 @@ export const MATCH_VOICE_COMMAND_HELP = [
     description: 'permet de rectifier les points du jeu en cours.',
   },
   {
+    command: 'Serveur',
+    description: 'permet de corriger l’équipe au service.',
+  },
+  {
     command: 'Fin de match',
     description: 'demande la clôture du match avec confirmation.',
+  },
+  {
+    command: 'Oui',
+    description: 'confirme la fin du match.',
+  },
+  {
+    command: 'Non',
+    description: 'annule la fin du match.',
+  },
+  {
+    command: 'Termine écoute',
+    description: 'suspend la reconnaissance vocale.',
   },
 ] as const
 
@@ -43,8 +67,31 @@ export function MatchScreen({
   onServingTeamChange,
 }: MatchScreenProps) {
   const { A, B } = snapshot.display.teams
-  const listening = snapshot.microphoneStatus === 'listening'
+  const listening = snapshot.conversation.isRunning
   const microphoneClass = `microphone microphone--${snapshot.microphoneStatus}`
+  const nextServer = A.isServing ? A : B
+  const teamVoiceCommands =
+    snapshot.session.state === 'IN_PROGRESS' && snapshot.configuration
+      ? [
+          {
+            command: snapshot.configuration.teamA.voiceName,
+            description: `ajoute un point à ${A.name}.`,
+          },
+          {
+            command: snapshot.configuration.teamB.voiceName,
+            description: `ajoute un point à ${B.name}.`,
+          },
+        ]
+      : []
+  const availableCommandHelp =
+    snapshot.session.state === 'FINISHED'
+      ? [
+          {
+            command: 'Nouveau match',
+            description: 'revient à la configuration vocale.',
+          },
+        ]
+      : MATCH_VOICE_COMMAND_HELP
 
   return (
     <>
@@ -99,6 +146,11 @@ export function MatchScreen({
               Victoire de {snapshot.display.teams[snapshot.display.winner].name}
             </p>
           )}
+        {snapshot.session.state === 'IN_PROGRESS' && (
+          <p className="next-server">
+            Prochain service <strong>{nextServer.name}</strong>
+          </p>
+        )}
       </section>
 
       <section className="status-panel" aria-live="polite">
@@ -123,14 +175,19 @@ export function MatchScreen({
         )}
       </section>
 
-      <section className="voice-command-guide" aria-label="Commandes vocales">
-        <span>À la voix</span>
-        <ul>
-          {MATCH_VOICE_COMMAND_HELP.map(({ command }) => (
-            <li key={command}>{command}</li>
-          ))}
-        </ul>
-      </section>
+      <details className="voice-command-help">
+        <summary>Consignes vocales</summary>
+        <dl>
+          {[...teamVoiceCommands, ...availableCommandHelp].map(
+            ({ command, description }) => (
+              <div key={command}>
+                <dt>{command}</dt>
+                <dd>{description}</dd>
+              </div>
+            ),
+          )}
+        </dl>
+      </details>
 
       <section className="controls" aria-label="Commandes de secours">
         <button type="button" onClick={() => onPoint('A')}>
@@ -154,11 +211,9 @@ export function MatchScreen({
         <button
           type="button"
           onClick={onToggleListening}
-          disabled={
-            !snapshot.recognitionAvailable || snapshot.phase === 'finished'
-          }
+          disabled={!snapshot.recognitionAvailable}
         >
-          {listening ? 'Désactiver l’écoute' : 'Activer l’écoute'}
+          {listening ? 'Désactiver l’écoute' : 'Réactiver l’écoute'}
         </button>
         {snapshot.phase === 'session-finished' && (
           <button type="button" className="primary" onClick={onNewMatch}>

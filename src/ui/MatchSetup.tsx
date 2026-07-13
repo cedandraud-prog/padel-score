@@ -2,16 +2,13 @@ import { useState } from 'react'
 import type { MicrophoneStatus } from '../application/MatchController'
 import type { MatchConfiguration } from '../application/matchConfiguration'
 import type { VoiceMatchSetupSnapshot } from '../application/VoiceMatchSetup'
-import type { TeamId } from '../core/matchTypes'
 import type { FeedbackMode } from '../voice/speechTypes'
-import { EditableDisplayName } from './EditableDisplayName'
 
 interface MatchSetupProps {
   message: string
   configuration: MatchConfiguration
   voiceSetup: VoiceMatchSetupSnapshot | null
   microphoneStatus: MicrophoneStatus
-  onDisplayNameChange(team: TeamId, value: string): void
   onVoiceSetup(feedbackMode: FeedbackMode): void
   onRestartConfiguration(): void
 }
@@ -30,12 +27,17 @@ function displayedValue(value: string, captured: boolean): string {
   return captured && value.trim() ? value : 'En attente…'
 }
 
+function voiceNameHelp(voiceName: string): string {
+  return voiceName.trim()
+    ? `Pendant le match, dites « ${voiceName} » pour attribuer un point à cette équipe.`
+    : 'Mot à prononcer pendant le match pour attribuer un point à cette équipe.'
+}
+
 export function MatchSetup({
   message,
   configuration,
   voiceSetup,
   microphoneStatus,
-  onDisplayNameChange,
   onVoiceSetup,
   onRestartConfiguration,
 }: MatchSetupProps) {
@@ -44,7 +46,6 @@ export function MatchSetup({
   const teamADisplayCaptured = !['idle', 'team-a-display-name'].includes(step)
   const teamBDisplayCaptured = [
     'team-b-voice-name',
-    'team-b-validation',
     'server',
     'confirmation',
     'completed',
@@ -95,15 +96,12 @@ export function MatchSetup({
               <div>
                 <dt>Nom affiché</dt>
                 <dd>
-                  {teamADisplayCaptured ? (
-                    <EditableDisplayName
-                      value={configuration.teamA.displayName}
-                      teamLabel="l’équipe 1"
-                      onSave={(value) => onDisplayNameChange('A', value)}
-                    />
-                  ) : (
-                    <output>En attente…</output>
-                  )}
+                  <output>
+                    {displayedValue(
+                      configuration.teamA.displayName,
+                      teamADisplayCaptured,
+                    )}
+                  </output>
                 </dd>
               </div>
               <div>
@@ -115,6 +113,9 @@ export function MatchSetup({
                       Boolean(configuration.teamA.voiceName.trim()),
                     )}
                   </output>
+                  <p className="setup-voice-help">
+                    {voiceNameHelp(configuration.teamA.voiceName)}
+                  </p>
                 </dd>
               </div>
             </dl>
@@ -125,15 +126,12 @@ export function MatchSetup({
               <div>
                 <dt>Nom affiché</dt>
                 <dd>
-                  {teamBDisplayCaptured ? (
-                    <EditableDisplayName
-                      value={configuration.teamB.displayName}
-                      teamLabel="l’équipe 2"
-                      onSave={(value) => onDisplayNameChange('B', value)}
-                    />
-                  ) : (
-                    <output>En attente…</output>
-                  )}
+                  <output>
+                    {displayedValue(
+                      configuration.teamB.displayName,
+                      teamBDisplayCaptured,
+                    )}
+                  </output>
                 </dd>
               </div>
               <div>
@@ -145,6 +143,9 @@ export function MatchSetup({
                       Boolean(configuration.teamB.voiceName.trim()),
                     )}
                   </output>
+                  <p className="setup-voice-help">
+                    {voiceNameHelp(configuration.teamB.voiceName)}
+                  </p>
                 </dd>
               </div>
             </dl>

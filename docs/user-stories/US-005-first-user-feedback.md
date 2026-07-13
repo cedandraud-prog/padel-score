@@ -37,8 +37,8 @@ La page de configuration affiche une aide courte :
 
 > Dites « Nouveau match » pour lancer la configuration vocale.
 
-Les champs manuels et le bouton « Configurer à la voix » restent disponibles ;
-aucun nouveau parcours n'est créé.
+Le bouton secondaire « Configurer à la voix » reste disponible ; aucun parcours
+manuel concurrent n'est créé.
 
 Le bouton « Démarrer le match » est supprimé de la page de configuration : il
 ne déclenchait plus le parcours réellement validé et créait une attente
@@ -61,12 +61,11 @@ La hiérarchie commence par :
 Cette commande est l'action visuelle dominante. L'état réel de l'écoute et la
 question en cours apparaissent avant les informations déjà reconnues.
 
-Les anciens champs deviennent des zones de restitution. Ils affichent « En
-attente… » puis les valeurs reconnues au fil du dialogue. Seul le nom affiché
-devient éditable après une action explicite sur son libellé ; la consigne vocale
-reste inchangée. Le sélecteur de feedback et le bouton de secours restent
-disponibles dans une zone secondaire « Autres options », sans concurrencer le
-parcours vocal.
+Les anciens champs deviennent des zones de restitution non éditables. Ils
+affichent « En attente… » puis les valeurs reconnues au fil du dialogue. La
+configuration reste entièrement vocale. Le sélecteur de feedback et le bouton
+de secours restent disponibles dans une zone secondaire « Autres options »,
+sans concurrencer le parcours vocal.
 
 ### Recommencer la configuration
 
@@ -81,7 +80,8 @@ dialogue vocal bloqué et n'apparaît jamais sur l'écran de score. La commande
 vocale historique reste compatible, mais elle n'est plus présentée comme le
 moyen principal. Les deux entrées utilisent le même cas d'usage applicatif :
 
-- le brouillon et les validations temporaires sont effacés ;
+- le brouillon est effacé sans conserver de donnée liée à l'ancien test de
+  reconnaissance ;
 - le dialogue revient à la première question ;
 - le système annonce brièvement : « D'accord, recommençons la configuration. » ;
 - l'ExperienceSession reste en configuration ;
@@ -104,9 +104,28 @@ Wake Lock reste actif parce que l'ExperienceSession demeure dans l'état
 
 Le libellé utilisateur « Nom vocal » devient « Consigne vocale ».
 
-Les concepts internes existants peuvent conserver leur nom lorsqu'un renommage
-n'apporte aucune valeur utilisateur. Le comportement reste identique : la
-consigne vocale exacte attribue un point pendant le match.
+La consigne vocale est le mot que le scoreur prononce pendant le match pour
+attribuer un point à l'équipe. La question explique ce rôle avant la réponse :
+
+> Quelle consigne vocale souhaitez-vous utiliser pour cette équipe ? Pendant le
+> match, vous prononcerez ce mot pour lui attribuer un point.
+
+Après chaque consigne reconnue et validée, le système confirme son usage avec la
+consigne et le nom affiché réels, par exemple :
+
+> Très bien. Pendant le match, dites « Bleu » pour donner un point à Les Bleus.
+
+L'ancienne étape séparée de test de reconnaissance est supprimée : elle ne
+produisait plus de valeur. Le parcours enchaîne désormais directement nom
+affiché A, consigne vocale A, nom affiché B, consigne vocale B, choix du serveur,
+puis confirmation et démarrage. Les règles de validité des consignes restent
+inchangées : elles doivent être non vides, courtes, distinctes et différentes
+des commandes réservées.
+
+Sur la page de configuration, une aide secondaire rappelle près de chaque
+« Consigne vocale » qu'il s'agit du mot à prononcer pour attribuer un point. Dès
+que le mot est connu, l'aide reprend cette valeur. Aucun champ éditable n'est
+réintroduit.
 
 ### Choix du serveur
 
@@ -123,15 +142,19 @@ demande les deux consignes vocales exactes pour lever l'ambiguïté.
 
 ### Corrections visuelles locales
 
-Pendant la configuration et le match, le nom affiché d'une équipe peut être
-modifié directement depuis son libellé. Cette correction ne modifie jamais sa
-consigne vocale, le score ou l'étape du dialogue. Elle ne relance pas la
-configuration.
+Pendant le match uniquement, le nom affiché d'une équipe peut être modifié
+directement depuis son libellé. Cette correction ne modifie jamais sa consigne
+vocale ou le score et ne relance pas la configuration.
 
 Pendant une session en cours, le marqueur de service de chaque équipe est un
 contrôle discret. Le sélectionner corrige uniquement l'équipe affichée au
 service. Les points, jeux et sets restent identiques et les rotations suivantes
 conservent cette correction.
+
+La commande vocale « Serveur » ouvre le même cas d'usage. Le système demande
+« Quelle équipe sert ? », puis accepte exactement le nom affiché ou la consigne
+vocale de l'équipe. Le contrôle manuel et la commande vocale partagent la même
+logique de correction.
 
 Les noms affichés reconnus vocalement sont capitalisés automatiquement. Les
 accents, apostrophes et traits d'union sont conservés. Une correction manuelle
@@ -140,6 +163,9 @@ reste toujours possible.
 Le tableau de score redevient l'élément principal : points, jeux, sets et
 service restent visibles sur les petits écrans. Les contrôles de correction et
 l'aide apparaissent après le score.
+
+L'annonce « Score complet » énonce les sets, les jeux, les points et le prochain
+service. La page score affiche également le prochain serveur sous le tableau.
 
 ### Fin de match
 
@@ -156,14 +182,27 @@ Le système demande désormais :
 
 ### Commandes visibles pendant le match
 
-Une aide compacte et toujours visible documente uniquement :
+Un panneau repliable « Consignes vocales » documente uniquement les commandes
+réellement disponibles :
 
+- les deux consignes vocales d'équipe ;
+- **Score** et **Score complet** ;
 - **Annuler** — retire la dernière action ;
 - **Corriger** — permet de rectifier les points du jeu en cours ;
+- **Serveur** — corrige l'équipe au service ;
 - **Fin de match** — demande la clôture du match avec confirmation.
+- **Oui** et **Non** — répondent à cette confirmation.
+- **Termine écoute** — suspend la reconnaissance vocale.
 
 Cette aide est non bloquante et reste visuellement secondaire par rapport au
 tableau de score.
+
+### Suspension de l'écoute
+
+Un bouton permanent affiche « Désactiver l'écoute » lorsque l'écoute est active
+et « Réactiver l'écoute » lorsqu'elle est suspendue. Cette action ne modifie ni
+la session de jeu, ni l'ExperienceSession, ni le Wake Lock. La réactivation
+reprend une seule session de reconnaissance.
 
 ## Voix des annonces
 
@@ -215,8 +254,8 @@ reste utilisable.
     manuel concurrent ; l'édition du nom affiché demande une action explicite.
 23. Le dialogue vocal, le Wake Lock et le démarrage réel du match restent
     inchangés.
-24. Un nom affiché peut être corrigé pendant la configuration ou le match sans
-    modifier sa consigne vocale.
+24. Un nom affiché peut être corrigé uniquement sur la page score sans modifier
+    sa consigne vocale.
 25. Le serveur peut être corrigé pendant le match sans modifier le score.
 26. Les noms reconnus vocalement sont capitalisés en conservant accents,
     apostrophes et traits d'union.
@@ -224,12 +263,33 @@ reste utilisable.
 28. Les commandes « Annuler », « Corriger » et « Fin de match » sont visibles
     sans explication longue.
 29. La simplicité visuelle ne supprime aucune commande ou information utile.
+30. « Serveur » demande l'équipe au service puis accepte son nom affiché ou sa
+    consigne vocale.
+31. L'annonce complète contient sets, jeux, points et prochain service avec les
+    accords singulier/pluriel.
+32. Le prochain serveur est également visible sous le tableau de score.
+33. Le panneau « Consignes vocales » reste repliable et ne documente que des
+    commandes implémentées.
+34. Désactiver puis réactiver l'écoute conserve la session, l'ExperienceSession
+    et le Wake Lock sans créer de reconnaissance concurrente.
+35. Aucune étape ni donnée de test de reconnaissance ne subsiste dans la
+    configuration vocale.
+36. La question « Consigne vocale » explique que le mot choisi attribuera un
+    point pendant le match.
+37. La confirmation reprend dynamiquement la consigne et le nom affiché de la
+    bonne équipe.
+38. Le parcours passe directement de la consigne A au nom B, puis de la consigne
+    B à « Qui sert ? ».
+39. Une aide courte et non éditable explique le rôle de chaque consigne sur la
+    page de configuration.
 
 ## Validation terrain attendue
 
 Le Human Validator vérifie sur le téléphone PLAYER :
 
 - la compréhension immédiate de « Consigne vocale » ;
+- la fluidité du parcours raccourci sans test de reconnaissance séparé ;
+- la compréhension de la confirmation pédagogique après chaque consigne ;
 - la visibilité et la compréhension du bouton « Recommencer » ;
 - la remise à zéro effective depuis plusieurs étapes du dialogue ;
 - l'accessibilité du bouton tactile d'une main sur le téléphone ;
@@ -243,8 +303,13 @@ Le Human Validator vérifie sur le téléphone PLAYER :
 - l'absence de débordement en portrait sur des écrans de 320, 360 et 390 px ;
 - la compréhension des informations comme des résultats vocaux et non comme un
   formulaire à remplir ;
-- la correction immédiate d'un nom affiché sans perte de la consigne vocale ;
+- l'absence de toute édition manuelle sur la configuration ;
+- la correction immédiate d'un nom affiché sur le score sans perte de la
+  consigne vocale ;
 - la correction du serveur sans changement du score ;
+- le dialogue « Serveur » avec un nom affiché puis une consigne vocale ;
+- la présence du prochain serveur dans l'annonce complète ;
+- la suspension et la reprise de l'écoute sans interruption du match ;
 - la lisibilité simultanée des points, jeux, sets et du service ;
 - la capitalisation obtenue avec des noms réels contenant accents, apostrophes
   ou traits d'union.

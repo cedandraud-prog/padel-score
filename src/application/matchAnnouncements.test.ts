@@ -69,8 +69,47 @@ describe('matchAnnouncements', () => {
     engine.awardPoint('A')
 
     expect(buildTransitionAnnouncement(previous, capture(engine), 'A')).toBe(
-      'jeu Lynx. Lynx mène 1 jeux à 0',
+      'jeu Lynx. Lynx mène un jeu à zéro',
     )
+  })
+
+  it('annonce égalités, singulier, points et prochain serveur', () => {
+    const engine = new ScoreEngine({ servingTeam: 'B' })
+    winGames(engine, 'A', 6)
+    for (let game = 0; game < 3; game += 1) {
+      winGame(engine, 'A')
+      winGame(engine, 'B')
+    }
+    engine.correctPoints(2, 2)
+
+    expect(buildFullScoreAnnouncement(capture(engine))).toBe(
+      'Équipe A mène un set à zéro. trois jeux partout. trente partout. Prochain service : Équipe B',
+    )
+  })
+
+  it('annonce naturellement les pluriels et peut omettre le prochain service', () => {
+    const engine = new ScoreEngine({ format: 'FREE_PLAY' })
+    winGames(engine, 'A', 6)
+    winGames(engine, 'B', 6)
+    winGames(engine, 'A', 6)
+    for (let game = 0; game < 3; game += 1) {
+      winGame(engine, 'A')
+      winGame(engine, 'B')
+    }
+    winGame(engine, 'A')
+    engine.correctPoints(1, 3)
+
+    const state = capture(engine)
+    expect(buildFullScoreAnnouncement(state)).toContain(
+      'Équipe A mène deux sets à un',
+    )
+    expect(buildFullScoreAnnouncement(state)).toContain(
+      'Équipe A mène quatre jeux à trois',
+    )
+    expect(buildFullScoreAnnouncement(state)).toContain('quinze quarante')
+    expect(
+      buildFullScoreAnnouncement(state, { includeNextServer: false }),
+    ).not.toContain('Prochain service')
   })
 
   it('annonce un set', () => {

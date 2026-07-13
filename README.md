@@ -43,12 +43,12 @@ Ouvrir ensuite l’adresse locale indiquée par Vite dans le navigateur.
 
 1. Ouvrir l’application avec Google Chrome.
 2. Autoriser l’accès au microphone lorsque Chrome le demande.
-3. Saisir, pour chaque équipe, le nom affiché et la consigne vocale, ou sélectionner **Configurer à la voix**.
+3. Dire **Nouveau match** ou sélectionner **Configurer à la voix**, puis répondre vocalement pour chaque équipe.
 4. Choisir l’équipe au service.
 5. Choisir le feedback de commande : bip court, voix « OK » ou aucun.
 6. Sélectionner **Démarrer le match**.
 
-Le nom affiché est libre. La consigne vocale distincte sert de commande pendant le match et n’est jamais proposée automatiquement. Le parcours guidé suit directement : nom affiché, consigne vocale, puis test après le bip. Seule une correspondance exacte après normalisation valide la consigne vocale. Les consignes vocales doivent être courtes, distinctes et différentes des commandes réservées. Une modification manuelle d’une consigne vocale invalide son test et impose une nouvelle validation avant le démarrage.
+Le nom affiché est libre. La consigne vocale est le mot prononcé pendant le match pour attribuer un point à l’équipe ; elle n’est jamais proposée automatiquement. Le parcours guidé demande directement le nom affiché puis la consigne de chaque équipe, avant le choix du serveur et le démarrage. Après chaque consigne, le système confirme son usage futur. Les consignes vocales doivent être courtes, distinctes et différentes des commandes réservées. La configuration reste entièrement vocale et n’ajoute aucun test de reconnaissance séparé.
 
 ### Commandes vocales
 

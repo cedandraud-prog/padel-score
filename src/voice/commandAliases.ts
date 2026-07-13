@@ -3,6 +3,7 @@ type CommandAliasKey =
   | 'full-score'
   | 'undo'
   | 'correct'
+  | 'server'
   | 'stop-listening'
   | 'resume-listening'
   | 'finish-match'
@@ -16,6 +17,7 @@ export type VoiceCommand =
   | { type: 'UNDO' }
   | { type: 'START_CORRECTION' }
   | { type: 'CORRECT_POINTS_INLINE'; spokenScore: string }
+  | { type: 'CHANGE_SERVER' }
   | { type: 'STOP_LISTENING' }
   | { type: 'RESUME_LISTENING' }
   | { type: 'FINISH_MATCH' }
@@ -28,6 +30,7 @@ export const COMMAND_ALIASES = {
   'full-score': ['score complet'],
   undo: ['annule', 'annuler', 'annulee', 'annulez'],
   correct: ['corrige', 'corriger', 'corrigez'],
+  server: ['serveur'],
   'stop-listening': ['termine ecoute'],
   'resume-listening': ['reprends ecoute'],
   'finish-match': ['fin de match'],
@@ -46,6 +49,7 @@ const EXACT_COMMANDS: ReadonlyArray<{
   { aliases: COMMAND_ALIASES.score, command: { type: 'SCORE' } },
   { aliases: COMMAND_ALIASES['full-score'], command: { type: 'FULL_SCORE' } },
   { aliases: COMMAND_ALIASES.undo, command: { type: 'UNDO' } },
+  { aliases: COMMAND_ALIASES.server, command: { type: 'CHANGE_SERVER' } },
   {
     aliases: COMMAND_ALIASES['stop-listening'],
     command: { type: 'STOP_LISTENING' },

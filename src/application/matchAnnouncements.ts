@@ -47,6 +47,14 @@ function numericPoint(value: string | number): string {
   return spokenNumber[value] ?? String(value)
 }
 
+function spokenScoreNumber(value: number): string {
+  return spokenNumber[value] ?? String(value)
+}
+
+function unit(value: number, singular: string, plural: string): string {
+  return value === 1 ? singular : plural
+}
+
 export function buildPointScoreAnnouncement(
   state: AnnounceableMatchState,
 ): string {
@@ -64,21 +72,48 @@ export function buildPointScoreAnnouncement(
 
 function gamesAnnouncement(state: AnnounceableMatchState): string {
   const { A, B } = state.display.teams
-  if (A.games === B.games) return `${A.games} jeux partout`
+  if (A.games === B.games) {
+    return `${spokenScoreNumber(A.games)} ${unit(A.games, 'jeu', 'jeux')} partout`
+  }
   const leader = A.games > B.games ? A : B
   const follower = leader.id === 'A' ? B : A
-  return `${leader.name} mène ${leader.games} jeux à ${follower.games}`
+  return `${leader.name} mène ${spokenScoreNumber(leader.games)} ${unit(leader.games, 'jeu', 'jeux')} à ${spokenScoreNumber(follower.games)}`
 }
 
 function setsAnnouncement(state: AnnounceableMatchState): string {
   const { A, B } = state.display.teams
-  return `${A.name} ${A.sets} set, ${B.name} ${B.sets} set`
+  if (A.sets === B.sets) {
+    return `égalité, ${spokenScoreNumber(A.sets)} ${unit(A.sets, 'set', 'sets')} partout`
+  }
+  const leader = A.sets > B.sets ? A : B
+  const follower = leader.id === 'A' ? B : A
+  return `${leader.name} mène ${spokenScoreNumber(leader.sets)} ${unit(leader.sets, 'set', 'sets')} à ${spokenScoreNumber(follower.sets)}`
+}
+
+function nextServerAnnouncement(state: AnnounceableMatchState): string {
+  const server = (['A', 'B'] as const)
+    .map((team) => state.display.teams[team])
+    .find((team) => team.isServing)
+  return server ? `Prochain service : ${server.name}` : ''
+}
+
+export interface FullScoreAnnouncementOptions {
+  includeNextServer?: boolean
 }
 
 export function buildFullScoreAnnouncement(
   state: AnnounceableMatchState,
+  options: FullScoreAnnouncementOptions = {},
 ): string {
-  return `${setsAnnouncement(state)}. ${gamesAnnouncement(state)}. ${buildPointScoreAnnouncement(state)}`
+  const parts = [
+    setsAnnouncement(state),
+    gamesAnnouncement(state),
+    buildPointScoreAnnouncement(state),
+  ]
+  if (options.includeNextServer !== false) {
+    parts.push(nextServerAnnouncement(state))
+  }
+  return parts.filter(Boolean).join('. ')
 }
 
 export function buildTransitionAnnouncement(

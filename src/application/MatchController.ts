@@ -39,7 +39,6 @@ import {
   validateMatchConfiguration,
 } from './matchConfiguration'
 import {
-  areVoiceNamesValidated,
   VoiceMatchSetup,
   type VoiceMatchSetupSnapshot,
 } from './VoiceMatchSetup'
@@ -84,6 +83,7 @@ export type MatchPhase =
   | 'voice-setup'
   | 'match'
   | 'correction'
+  | 'server-correction'
   | 'session-end-confirmation'
   | 'session-finished'
   | 'finished'
@@ -374,15 +374,6 @@ export class MatchController {
   }
 
   startConfiguredMatch(options: StartMatchOptions): boolean {
-    const validatedNames = this.voiceSetupSnapshot?.validatedVoiceNames ?? {
-      A: null,
-      B: null,
-    }
-    if (!areVoiceNamesValidated(options.configuration, validatedNames)) {
-      this.message = 'Les deux consignes vocales doivent être validées.'
-      this.emit()
-      return false
-    }
     return this.startMatch(options)
   }
 
@@ -450,22 +441,12 @@ export class MatchController {
 
   updateDisplayName(team: TeamId, value: string): boolean {
     const displayName = value.trim()
-    if (!displayName) return false
+    if (!displayName || !this.configuration) return false
+    if (this.phase === 'setup' || this.phase === 'voice-setup') return false
     const key = team === 'A' ? 'teamA' : 'teamB'
 
-    if (this.phase === 'setup' || this.phase === 'voice-setup') {
-      this.editingConfiguration[key].displayName = displayName
-      this.editingRevision += 1
-      if (this.phase === 'voice-setup') {
-        this.voiceSetup.synchronizeConfiguration(this.editingConfiguration)
-        this.voiceSetupSnapshot = this.voiceSetup.getSnapshot()
-      }
-    } else if (this.configuration) {
-      this.configuration[key].displayName = displayName
-      this.editingConfiguration[key].displayName = displayName
-    } else {
-      return false
-    }
+    this.configuration[key].displayName = displayName
+    this.editingConfiguration[key].displayName = displayName
 
     this.message = ''
     this.emit()
@@ -474,10 +455,11 @@ export class MatchController {
 
   changeServingTeam(team: TeamId): boolean {
     if (this.session.getSnapshot().state !== 'IN_PROGRESS') return false
-    const engineServingTeam = this.engine.getState().servingTeam
-    this.servingTeamSwapped = team !== engineServingTeam
-    const teamName = this.getPresentationDisplayState().teams[team].name
-    this.message = `Service : ${teamName}.`
+    if (this.phase === 'server-correction') {
+      this.conversation.exitGuidedMode()
+      this.phase = 'match'
+    }
+    this.applyServingTeamChange(team)
     this.emit()
     return true
   }
@@ -601,6 +583,11 @@ export class MatchController {
       return
     }
 
+    if (this.phase === 'server-correction') {
+      await this.handleServerCorrection(normalized)
+      return
+    }
+
     if (this.phase === 'session-end-confirmation') {
       await this.handleSessionEndConfirmation(normalized)
       return
@@ -675,6 +662,12 @@ export class MatchController {
         this.lastCommand = 'CORRECT_POINTS_INLINE'
         this.extractedContent = command.spokenScore
         await this.handleInlinePointCorrection(normalized, command.spokenScore)
+        return
+      case 'CHANGE_SERVER':
+        this.lastCommand = 'Serveur'
+        await this.executeAcceptedVoiceCommand(normalized, () =>
+          this.enterServerCorrection(),
+        )
         return
       case 'STOP_LISTENING':
         this.lastCommand = 'Termine écoute'
@@ -752,7 +745,12 @@ export class MatchController {
   }
 
   async announceFullScore(): Promise<void> {
-    await this.announce(buildFullScoreAnnouncement(snapshotOf(this.engine)))
+    await this.announce(
+      buildFullScoreAnnouncement({
+        match: this.engine.getState(),
+        display: this.getPresentationDisplayState(),
+      }),
+    )
   }
 
   async enterCorrection(): Promise<void> {
@@ -767,6 +765,19 @@ export class MatchController {
     this.emit()
     await this.announce('Nouveau score ?', true)
     if (this.phase === 'correction') this.conversation.enterGuidedMode(10_000)
+  }
+
+  async enterServerCorrection(): Promise<void> {
+    if (this.phase !== 'match') return
+    this.conversation.exitGuidedMode()
+    this.conversation.enterGuidedMode()
+    this.phase = 'server-correction'
+    this.conversationStatus = 'Mode normal'
+    this.interpretation = 'attente de l’équipe au service'
+    this.rejectionReason = ''
+    this.message = 'Quelle équipe sert ?'
+    this.emit()
+    await this.announce('Quelle équipe sert ?', true)
   }
 
   cancelCorrection(): void {
@@ -940,7 +951,9 @@ export class MatchController {
     this.message = 'Session terminée'
     this.emit()
     await this.announce(
-      `Fin du match. ${buildFullScoreAnnouncement(snapshotOf(this.engine))}`,
+      `Fin du match. ${buildFullScoreAnnouncement(snapshotOf(this.engine), {
+        includeNextServer: false,
+      })}`,
     )
   }
 
@@ -972,6 +985,46 @@ export class MatchController {
     await this.executeAcceptedVoiceCommand(normalized, () =>
       this.applyPointCorrection(parsed),
     )
+  }
+
+  private async handleServerCorrection(
+    normalizedTranscript: string,
+  ): Promise<void> {
+    const command = resolveVoiceCommand(normalizedTranscript)
+    if (command?.type === 'UNDO' || command?.type === 'DECLINE') {
+      await this.executeAcceptedVoiceCommand(normalizedTranscript, async () => {
+        this.conversation.manualCancel()
+        this.phase = 'match'
+        this.lastCommand = 'Changement de serveur annulé'
+        this.message = 'Changement de serveur annulé.'
+        this.emit()
+        await this.announce('Changement de serveur annulé')
+      })
+      return
+    }
+
+    const matches = this.matchingConfiguredTeams(normalizedTranscript)
+    if (matches.length !== 1) {
+      this.lastCommand = 'Équipe au service non comprise'
+      this.rejectionReason =
+        matches.length > 1 ? 'Réponse ambiguë.' : 'Équipe inconnue.'
+      this.message = 'Équipe non comprise. Quelle équipe sert ?'
+      this.emit()
+      await this.announce('Équipe non comprise. Quelle équipe sert ?', true)
+      return
+    }
+
+    const team = matches[0]
+    await this.executeAcceptedVoiceCommand(normalizedTranscript, async () => {
+      this.conversation.exitGuidedMode()
+      this.phase = 'match'
+      this.applyServingTeamChange(team)
+      this.lastCommand = `Serveur ${team}`
+      this.interpretation = `service ${team}`
+      this.rejectionReason = ''
+      this.emit()
+      await this.announce(this.message)
+    })
   }
 
   private async handleInlinePointCorrection(
@@ -1070,6 +1123,7 @@ export class MatchController {
       this.phase === 'voice-setup' ||
       this.phase === 'match' ||
       this.phase === 'correction' ||
+      this.phase === 'server-correction' ||
       this.phase === 'session-end-confirmation' ||
       this.phase === 'session-finished'
     )
@@ -1532,6 +1586,24 @@ export class MatchController {
         },
       },
     }
+  }
+
+  private applyServingTeamChange(team: TeamId): void {
+    const engineServingTeam = this.engine.getState().servingTeam
+    this.servingTeamSwapped = team !== engineServingTeam
+    const teamName = this.getPresentationDisplayState().teams[team].name
+    this.message = `Service : ${teamName}.`
+  }
+
+  private matchingConfiguredTeams(normalizedTranscript: string): TeamId[] {
+    if (!this.configuration) return []
+    return (['A', 'B'] as const).filter((team) => {
+      const configuredTeam =
+        team === 'A' ? this.configuration?.teamA : this.configuration?.teamB
+      return [configuredTeam?.displayName, configuredTeam?.voiceName].some(
+        (name) => normalizeSpeech(name ?? '') === normalizedTranscript,
+      )
+    })
   }
 
   private traceVoice(event: Omit<VoiceTraceEvent, 'at'>): void {

@@ -933,19 +933,17 @@ describe('MatchController', () => {
 })
 
 describe('MatchController corrections visuelles du MLP', () => {
-  it('modifie le nom affiché pendant la configuration sans relancer le dialogue', async () => {
+  it('refuse l’édition du nom affiché pendant la configuration', async () => {
     const recognition = new MockRecognition()
     const controller = new MatchController(recognition, new MockSynthesis())
     await controller.startVoiceSetup()
     const startsBeforeEdit = recognition.startCount
 
-    expect(controller.updateDisplayName('A', 'Les Champions')).toBe(true)
+    expect(controller.updateDisplayName('A', 'Les Champions')).toBe(false)
 
     const snapshot = controller.getSnapshot()
     expect(snapshot.phase).toBe('voice-setup')
-    expect(snapshot.editingConfiguration.teamA.displayName).toBe(
-      'Les Champions',
-    )
+    expect(snapshot.editingConfiguration.teamA.displayName).toBe('Équipe A')
     expect(snapshot.editingConfiguration.teamA.voiceName).toBe('')
     expect(recognition.startCount).toBe(startsBeforeEdit)
   })
@@ -1000,6 +998,80 @@ describe('MatchController corrections visuelles du MLP', () => {
     expect(nextGame.teams.A.games).toBe(1)
     expect(nextGame.teams.A.isServing).toBe(true)
     expect(nextGame.teams.B.isServing).toBe(false)
+
+    await controller.enterServerCorrection()
+    expect(controller.changeServingTeam('B')).toBe(true)
+    expect(controller.getSnapshot().phase).toBe('match')
+    expect(controller.getSnapshot().display.teams.B.isServing).toBe(true)
+  })
+
+  it('corrige vocalement le serveur avec le nom affiché ou la consigne vocale', async () => {
+    const synthesis = new MockSynthesis()
+    const controller = new MatchController(new MockRecognition(), synthesis)
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceName: 'Rouge' },
+        teamB: { displayName: 'Invincibles', voiceName: 'Bleu' },
+        servingTeam: 'A',
+      },
+    })
+    await controller.awardPoint('A')
+    const scoreBefore = controller.getSnapshot().display
+
+    await controller.handleTranscript({ transcript: 'Serveur' })
+    expect(controller.getSnapshot().phase).toBe('server-correction')
+    expect(synthesis.spoken).toContain('Quelle équipe sert ?')
+
+    await controller.handleTranscript({ transcript: 'Bleu' })
+    const corrected = controller.getSnapshot()
+    expect(corrected.phase).toBe('match')
+    expect(corrected.display.teams.B.isServing).toBe(true)
+    expect(corrected.display.teams.A.points).toBe(scoreBefore.teams.A.points)
+    expect(corrected.display.teams.B.points).toBe(scoreBefore.teams.B.points)
+
+    await controller.handleTranscript({ transcript: 'Serveur' })
+    await controller.handleTranscript({ transcript: 'Champions' })
+    expect(controller.getSnapshot().display.teams.A.isServing).toBe(true)
+  })
+
+  it('annonce le futur serveur avec le nom affiché actuel', async () => {
+    const synthesis = new MockSynthesis()
+    const controller = new MatchController(new MockRecognition(), synthesis)
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceName: 'Rouge' },
+        teamB: { displayName: 'Invincibles', voiceName: 'Bleu' },
+        servingTeam: 'A',
+      },
+    })
+    controller.updateDisplayName('B', 'Les Bleus')
+    controller.changeServingTeam('B')
+
+    await controller.announceFullScore()
+
+    expect(synthesis.spoken.at(-1)).toContain('Prochain service : Les Bleus')
+  })
+
+  it('suspend et réactive une seule écoute sans quitter l’expérience', () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    const experience = controller.getSnapshot().experience
+    const startsBeforeToggle = recognition.startCount
+
+    controller.toggleListening()
+    expect(controller.getSnapshot().microphoneStatus).toBe('disabled')
+    expect(controller.getSnapshot().experience).toEqual(experience)
+    expect(controller.getSnapshot().session.state).toBe('IN_PROGRESS')
+
+    controller.toggleListening()
+    expect(recognition.startCount).toBe(startsBeforeToggle + 1)
+    expect(controller.getSnapshot().experience).toEqual(experience)
+
+    controller.enableListening()
+    expect(recognition.startCount).toBe(startsBeforeToggle + 1)
   })
 })
 
@@ -1025,7 +1097,7 @@ describe('MatchController configuration', () => {
     expect(controller.getSnapshot().display.teams.B.isServing).toBe(true)
   })
 
-  it('refuse le démarrage tant que les noms vocaux ne sont pas validés', () => {
+  it('démarre avec une configuration complète sans étape de test vocal', () => {
     const controller = new MatchController(
       new MockRecognition(),
       new MockSynthesis(),
@@ -1038,11 +1110,11 @@ describe('MatchController configuration', () => {
           servingTeam: 'A',
         },
       }),
-    ).toBe(false)
-    expect(controller.getSnapshot().phase).toBe('setup')
+    ).toBe(true)
+    expect(controller.getSnapshot().phase).toBe('match')
   })
 
-  it('mène le parcours vocal avec validation exacte jusqu’au match', async () => {
+  it('mène le parcours vocal direct jusqu’au match', async () => {
     const controller = new MatchController(
       new MockRecognition(),
       new MockSynthesis(),
@@ -1051,9 +1123,7 @@ describe('MatchController configuration', () => {
     for (const transcript of [
       'Champions',
       'Rouge',
-      'Rouge',
       'Invincibles',
-      'Bleu',
       'Bleu',
       'Bleu',
       'Démarrer',
@@ -1107,7 +1177,7 @@ describe('MatchController configuration', () => {
     )
     await voiceController.startVoiceSetup()
     await touchController.startVoiceSetup()
-    for (const transcript of ['Champions', 'Rouge', 'Rouge']) {
+    for (const transcript of ['Champions', 'Rouge']) {
       await voiceController.handleTranscript({ transcript })
       await touchController.handleTranscript({ transcript })
     }
@@ -1130,11 +1200,8 @@ describe('MatchController configuration', () => {
   it.each([
     ['première question', []],
     ['saisie de la consigne vocale', ['Champions']],
-    ['test de la consigne vocale', ['Champions', 'Rouge']],
-    [
-      'choix du serveur',
-      ['Champions', 'Rouge', 'Rouge', 'Baltringues', 'Bleu', 'Bleu'],
-    ],
+    ['nom de la deuxième équipe', ['Champions', 'Rouge']],
+    ['choix du serveur', ['Champions', 'Rouge', 'Baltringues', 'Bleu']],
   ])('le bouton tactile recommence pendant %s', async (_label, transcripts) => {
     const controller = new MatchController(
       new MockRecognition(),
@@ -1153,10 +1220,8 @@ describe('MatchController configuration', () => {
     expect(snapshot.editingConfiguration).toEqual(
       createDefaultMatchConfiguration(),
     )
-    expect(snapshot.voiceSetup?.validatedVoiceNames).toEqual({
-      A: null,
-      B: null,
-    })
+    expect(snapshot.voiceSetup).not.toHaveProperty('validatedVoiceNames')
+    expect(snapshot.voiceSetup).not.toHaveProperty('heardTranscript')
     expect(snapshot.session.state).toBe('NOT_STARTED')
   })
 
@@ -1243,23 +1308,6 @@ describe('MatchController configuration', () => {
     expect(
       controller.getSnapshot().editingConfiguration.teamA.displayName,
     ).toBe('Les Baltringues')
-  })
-
-  it('une modification manuelle invalide la validation vocale', async () => {
-    const controller = new MatchController(
-      new MockRecognition(),
-      new MockSynthesis(),
-    )
-    await controller.startVoiceSetup()
-    await controller.handleTranscript({ transcript: 'Champions' })
-    await controller.handleTranscript({ transcript: 'Rouge' })
-    await controller.handleTranscript({ transcript: 'Rouge' })
-    const edited = controller.getSnapshot().editingConfiguration
-    edited.teamA.voiceName = 'Tango'
-    controller.updateEditingConfiguration(edited)
-    expect(
-      controller.getSnapshot().voiceSetup?.validatedVoiceNames.A,
-    ).toBeNull()
   })
 
   it('ignore une transcription d’une ancienne session après une modification manuelle', async () => {

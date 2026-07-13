@@ -12,7 +12,6 @@ describe('MatchSetup', () => {
         configuration={createDefaultMatchConfiguration()}
         voiceSetup={null}
         microphoneStatus="listening"
-        onDisplayNameChange={() => undefined}
         onVoiceSetup={() => undefined}
         onRestartConfiguration={() => undefined}
       />,
@@ -24,6 +23,11 @@ describe('MatchSetup', () => {
     expect(html).toContain('<strong>« Nouveau match »</strong>')
     expect(html).toContain('Écoute active')
     expect(html.match(/Consigne vocale/g)).toHaveLength(2)
+    expect(
+      html.match(
+        /Mot à prononcer pendant le match pour attribuer un point à cette équipe\./g,
+      ),
+    ).toHaveLength(2)
     expect(html).toContain('En attente…')
     expect(html).not.toContain('<input')
     expect(html).not.toContain('Démarrer le match')
@@ -47,9 +51,7 @@ describe('MatchSetup', () => {
     for (const transcript of [
       'Champions',
       'Rouge',
-      'Rouge',
       'Baltringues',
-      'Bleu',
       'Bleu',
       'Rouge',
     ]) {
@@ -59,10 +61,8 @@ describe('MatchSetup', () => {
     expect(snapshots.map(({ step }) => step)).toEqual([
       'team-a-display-name',
       'team-a-voice-name',
-      'team-a-validation',
       'team-b-display-name',
       'team-b-voice-name',
-      'team-b-validation',
       'server',
       'confirmation',
     ])
@@ -74,7 +74,6 @@ describe('MatchSetup', () => {
           configuration={voiceSetup.configuration}
           voiceSetup={voiceSetup}
           microphoneStatus="listening"
-          onDisplayNameChange={() => undefined}
           onVoiceSetup={() => undefined}
           onRestartConfiguration={() => undefined}
         />,
@@ -91,7 +90,7 @@ describe('MatchSetup', () => {
     }
   })
 
-  it('restitue les valeurs vocales avec une édition ciblée du nom affiché', () => {
+  it('restitue les valeurs vocales sans édition manuelle des noms', () => {
     const setup = new VoiceMatchSetup()
     setup.start()
     setup.handle('Champions du monde très motivés')
@@ -103,16 +102,22 @@ describe('MatchSetup', () => {
         configuration={voiceSetup.configuration}
         voiceSetup={voiceSetup}
         microphoneStatus="speaking"
-        onDisplayNameChange={() => undefined}
         onVoiceSetup={() => undefined}
         onRestartConfiguration={() => undefined}
       />,
     )
 
     expect(html).toContain('Champions Du Monde Très Motivés')
-    expect(html).toContain('Modifier le nom affiché de l’équipe 1')
+    expect(html).not.toContain('Modifier le nom affiché')
     expect(html).toContain('<output>Rouge</output>')
+    expect(html).toContain(
+      'Pendant le match, dites « Rouge » pour attribuer un point à cette équipe.',
+    )
+    expect(html).toContain(
+      'Mot à prononcer pendant le match pour attribuer un point à cette équipe.',
+    )
     expect(html).toContain('Annonce en cours')
     expect(html).not.toContain('<input')
+    expect(html).not.toContain('Test de reconnaissance')
   })
 })
