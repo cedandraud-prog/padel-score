@@ -7,6 +7,7 @@ import {
   validateDisplayName,
   validateVoiceName,
 } from './matchConfiguration'
+import { formatRecognizedDisplayName } from './formatDisplayName'
 
 export type VoiceSetupStep =
   | 'idle'
@@ -150,7 +151,7 @@ export class VoiceMatchSetup {
     team: TeamId,
     transcript: string,
   ): VoiceSetupResult {
-    const value = spokenLabel(transcript)
+    const value = formatRecognizedDisplayName(spokenLabel(transcript))
     const error = validateDisplayName(value)
     if (error) return this.reject(error)
     this.configuration[teamKey(team)].displayName = value

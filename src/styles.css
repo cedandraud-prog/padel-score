@@ -105,7 +105,7 @@ h1 {
 .scoreboard,
 .status-panel,
 .controls,
-.voice-command-help,
+.voice-command-guide,
 .diagnostics {
   border: 1px solid #345149;
   border-radius: 0.75rem;
@@ -284,6 +284,53 @@ form,
   overflow-wrap: anywhere;
 }
 
+.editable-team-name {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font-weight: inherit;
+  text-align: left;
+}
+
+.editable-team-name:hover:not(:disabled) {
+  background: transparent;
+}
+
+.editable-team-name > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editable-team-name > span:last-child {
+  flex: none;
+  color: #82928d;
+  font-size: 0.8em;
+}
+
+.editable-team-name-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.editable-team-name-form input,
+.editable-team-name-form button {
+  min-width: 0;
+}
+
+.editable-team-name-form button {
+  padding-inline: 0.65rem;
+}
+
 .setup-server-summary {
   margin-top: 0.75rem;
 }
@@ -346,8 +393,9 @@ fieldset {
 .scoreboard-header,
 .team-row {
   display: grid;
-  grid-template-columns: minmax(280px, 1fr) 120px 120px 200px;
+  grid-template-columns: minmax(240px, 1fr) 7rem 7rem 10rem;
   align-items: center;
+  column-gap: 0.5rem;
 }
 
 .scoreboard-header {
@@ -360,20 +408,39 @@ fieldset {
 }
 
 .team-row {
-  min-height: 150px;
+  min-height: 132px;
   padding: 1rem 1.4rem;
   border-top: 1px solid #345149;
   font-size: 2.25rem;
 }
 
-.team-row strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.team-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 800;
 }
 
-.team-row strong span {
+.server-control {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-color: transparent;
+  border-radius: 50%;
+  padding: 0;
+  color: #546a63;
+  background: transparent;
+}
+
+.server-control--active {
   color: #a8f0c6;
+  background: #173c2d;
+}
+
+.score-value {
+  font-size: 2.25rem;
+  font-weight: 750;
 }
 
 .team-row--winner {
@@ -408,7 +475,7 @@ fieldset {
 
 .status-panel,
 .controls,
-.voice-command-help,
+.voice-command-guide,
 .diagnostics {
   margin-top: 1rem;
   padding: 1rem;
@@ -467,38 +534,37 @@ fieldset {
   background: #35211f;
 }
 
-.voice-command-help {
+.voice-command-guide {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
   color: #c4d4cf;
 }
 
-.voice-command-help summary {
-  cursor: pointer;
-  color: #f4f7f5;
-  font-weight: 700;
+.voice-command-guide > span {
+  color: #82928d;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.voice-command-help dl {
-  display: grid;
-  gap: 0.65rem;
-  margin: 1rem 0 0;
-}
-
-.voice-command-help dl div {
+.voice-command-guide ul {
   display: flex;
-  gap: 0.4rem;
-}
-
-.voice-command-help dt {
-  color: #f4f7f5;
-  font-weight: 750;
-}
-
-.voice-command-help dt::after {
-  content: ' —';
-}
-
-.voice-command-help dd {
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.voice-command-guide li {
+  border: 1px solid #345149;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  color: #f4f7f5;
+  background: #0b1814;
+  font-weight: 700;
 }
 
 .diagnostics summary {
@@ -615,6 +681,61 @@ fieldset {
 
   .wake-lock-warning {
     align-items: flex-start;
+  }
+
+  .scoreboard-header,
+  .team-row {
+    grid-template-columns: minmax(0, 1fr) 2.75rem 2.75rem minmax(3.75rem, auto);
+    column-gap: 0.25rem;
+  }
+
+  .scoreboard-header {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+  }
+
+  .team-row {
+    min-height: 105px;
+    padding: 0.8rem 0.75rem;
+    font-size: 1rem;
+  }
+
+  .team-identity {
+    gap: 0.35rem;
+  }
+
+  .server-control {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .score-value {
+    font-size: 1.45rem;
+    text-align: center;
+  }
+
+  .points {
+    font-size: clamp(2.4rem, 13vw, 3.5rem);
+    text-align: center;
+  }
+
+  .status-panel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .voice-command-guide {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .editable-team-name-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .editable-team-name-form button:last-child {
+    grid-column: 1 / -1;
   }
 }
 

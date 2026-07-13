@@ -15,7 +15,7 @@ le vocabulaire du produit et le langage spontané du joueur :
   demande de fin de match ;
 - les principales commandes disponibles pendant le match n'étaient pas
   consultables sur l'écran de score ;
-- la voix des annonces dépendait du navigateur sans diagnostic explicite.
+- la voix des annonces dépendait du navigateur sans diagnostic explicite ;
 - sur téléphone, la configuration restait enfermée dans un bloc trop étroit et
   débordait horizontalement à cause d'une largeur minimale pensée pour le
   tableau de score ;
@@ -61,10 +61,12 @@ La hiérarchie commence par :
 Cette commande est l'action visuelle dominante. L'état réel de l'écoute et la
 question en cours apparaissent avant les informations déjà reconnues.
 
-Les anciens champs deviennent des zones de restitution non éditables. Ils
-affichent « En attente… » puis les valeurs reconnues au fil du dialogue. Le
-sélecteur de feedback et le bouton de secours restent disponibles dans une zone
-secondaire « Autres options », sans concurrencer le parcours vocal.
+Les anciens champs deviennent des zones de restitution. Ils affichent « En
+attente… » puis les valeurs reconnues au fil du dialogue. Seul le nom affiché
+devient éditable après une action explicite sur son libellé ; la consigne vocale
+reste inchangée. Le sélecteur de feedback et le bouton de secours restent
+disponibles dans une zone secondaire « Autres options », sans concurrencer le
+parcours vocal.
 
 ### Recommencer la configuration
 
@@ -119,6 +121,26 @@ les espaces superflus. Aucun rapprochement flou n'est utilisé.
 Si une réponse peut désigner les deux équipes, le système ne choisit pas. Il
 demande les deux consignes vocales exactes pour lever l'ambiguïté.
 
+### Corrections visuelles locales
+
+Pendant la configuration et le match, le nom affiché d'une équipe peut être
+modifié directement depuis son libellé. Cette correction ne modifie jamais sa
+consigne vocale, le score ou l'étape du dialogue. Elle ne relance pas la
+configuration.
+
+Pendant une session en cours, le marqueur de service de chaque équipe est un
+contrôle discret. Le sélectionner corrige uniquement l'équipe affichée au
+service. Les points, jeux et sets restent identiques et les rotations suivantes
+conservent cette correction.
+
+Les noms affichés reconnus vocalement sont capitalisés automatiquement. Les
+accents, apostrophes et traits d'union sont conservés. Une correction manuelle
+reste toujours possible.
+
+Le tableau de score redevient l'élément principal : points, jeux, sets et
+service restent visibles sur les petits écrans. Les contrôles de correction et
+l'aide apparaissent après le score.
+
 ### Fin de match
 
 Le système demande désormais :
@@ -134,13 +156,14 @@ Le système demande désormais :
 
 ### Commandes visibles pendant le match
 
-Une zone repliable « Commandes vocales » documente uniquement :
+Une aide compacte et toujours visible documente uniquement :
 
 - **Annuler** — retire la dernière action ;
 - **Corriger** — permet de rectifier les points du jeu en cours ;
 - **Fin de match** — demande la clôture du match avec confirmation.
 
-Cette aide est non bloquante et n'altère pas la lecture du tableau de score.
+Cette aide est non bloquante et reste visuellement secondaire par rapport au
+tableau de score.
 
 ## Voix des annonces
 
@@ -188,10 +211,19 @@ reste utilisable.
     360 et 390 px de large.
 21. « Nouveau match » est présenté comme l'action principale avant l'état de
     l'écoute et les informations reconnues.
-22. Les noms, consignes vocales et le serveur sont restitués sans input
-    éditable.
+22. Les noms, consignes vocales et le serveur sont restitués sans formulaire
+    manuel concurrent ; l'édition du nom affiché demande une action explicite.
 23. Le dialogue vocal, le Wake Lock et le démarrage réel du match restent
     inchangés.
+24. Un nom affiché peut être corrigé pendant la configuration ou le match sans
+    modifier sa consigne vocale.
+25. Le serveur peut être corrigé pendant le match sans modifier le score.
+26. Les noms reconnus vocalement sont capitalisés en conservant accents,
+    apostrophes et traits d'union.
+27. Points, jeux, sets et service restent lisibles à 320, 360 et 390 px.
+28. Les commandes « Annuler », « Corriger » et « Fin de match » sont visibles
+    sans explication longue.
+29. La simplicité visuelle ne supprime aucune commande ou information utile.
 
 ## Validation terrain attendue
 
@@ -210,4 +242,9 @@ Le Human Validator vérifie sur le téléphone PLAYER :
   PWA installée ;
 - l'absence de débordement en portrait sur des écrans de 320, 360 et 390 px ;
 - la compréhension des informations comme des résultats vocaux et non comme un
-  formulaire à remplir.
+  formulaire à remplir ;
+- la correction immédiate d'un nom affiché sans perte de la consigne vocale ;
+- la correction du serveur sans changement du score ;
+- la lisibilité simultanée des points, jeux, sets et du service ;
+- la capitalisation obtenue avec des noms réels contenant accents, apostrophes
+  ou traits d'union.

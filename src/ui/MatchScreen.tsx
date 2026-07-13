@@ -1,5 +1,6 @@
 import type { MatchControllerSnapshot } from '../application/MatchController'
 import type { TeamId } from '../core/matchTypes'
+import { EditableDisplayName } from './EditableDisplayName'
 
 interface MatchScreenProps {
   snapshot: MatchControllerSnapshot
@@ -10,6 +11,8 @@ interface MatchScreenProps {
   onCorrect(): void
   onToggleListening(): void
   onNewMatch(): void
+  onDisplayNameChange(team: TeamId, value: string): void
+  onServingTeamChange(team: TeamId): void
 }
 
 export const MATCH_VOICE_COMMAND_HELP = [
@@ -36,6 +39,8 @@ export function MatchScreen({
   onCorrect,
   onToggleListening,
   onNewMatch,
+  onDisplayNameChange,
+  onServingTeamChange,
 }: MatchScreenProps) {
   const { A, B } = snapshot.display.teams
   const listening = snapshot.microphoneStatus === 'listening'
@@ -55,13 +60,36 @@ export function MatchScreen({
             className={`team-row${team.isWinner ? ' team-row--winner' : ''}`}
             key={team.id}
           >
-            <strong>
-              {team.isServing && <span title="Au service">● </span>}
-              {team.name}
-            </strong>
-            <span>{team.sets}</span>
-            <span>{team.games}</span>
-            <span className="points">{team.points}</span>
+            <div className="team-identity">
+              <button
+                className={`server-control${team.isServing ? ' server-control--active' : ''}`}
+                type="button"
+                onClick={() => onServingTeamChange(team.id)}
+                disabled={snapshot.session.state !== 'IN_PROGRESS'}
+                aria-label={
+                  team.isServing
+                    ? `${team.name} est au service`
+                    : `Donner le service à ${team.name}`
+                }
+                aria-pressed={team.isServing}
+              >
+                <span aria-hidden="true">●</span>
+              </button>
+              <EditableDisplayName
+                value={team.name}
+                teamLabel={team.name}
+                onSave={(value) => onDisplayNameChange(team.id, value)}
+              />
+            </div>
+            <span className="score-value" aria-label={`${team.sets} sets`}>
+              {team.sets}
+            </span>
+            <span className="score-value" aria-label={`${team.games} jeux`}>
+              {team.games}
+            </span>
+            <span className="points" aria-label={`${team.points} points`}>
+              {team.points}
+            </span>
           </div>
         ))}
         {snapshot.display.isTieBreak && <p className="badge">Tie-break</p>}
@@ -93,6 +121,15 @@ export function MatchScreen({
             {snapshot.message}
           </p>
         )}
+      </section>
+
+      <section className="voice-command-guide" aria-label="Commandes vocales">
+        <span>À la voix</span>
+        <ul>
+          {MATCH_VOICE_COMMAND_HELP.map(({ command }) => (
+            <li key={command}>{command}</li>
+          ))}
+        </ul>
       </section>
 
       <section className="controls" aria-label="Commandes de secours">
@@ -129,18 +166,6 @@ export function MatchScreen({
           </button>
         )}
       </section>
-
-      <details className="voice-command-help">
-        <summary>Commandes vocales</summary>
-        <dl>
-          {MATCH_VOICE_COMMAND_HELP.map(({ command, description }) => (
-            <div key={command}>
-              <dt>{command}</dt>
-              <dd>{description}</dd>
-            </div>
-          ))}
-        </dl>
-      </details>
     </>
   )
 }

@@ -177,6 +177,7 @@ export class MatchController {
   private feedbackMode: FeedbackMode = 'NONE'
   private configuration: MatchConfiguration | null = null
   private editingConfiguration = createDefaultMatchConfiguration()
+  private servingTeamSwapped = false
   private editingRevision = 0
   private readonly voiceSetup = new VoiceMatchSetup()
   private readonly waitingVoiceEntry = new WaitingVoiceEntry()
@@ -229,7 +230,7 @@ export class MatchController {
   getSnapshot(): MatchControllerSnapshot {
     return {
       phase: this.phase,
-      display: this.engine.getDisplayState(),
+      display: this.getPresentationDisplayState(),
       microphoneStatus: this.microphoneStatus,
       recognitionAvailable: this.recognition.isSupported,
       lastTranscript: this.lastTranscript,
@@ -338,6 +339,7 @@ export class MatchController {
     this.experience.startMatch()
     this.configuration = copyMatchConfiguration(options.configuration)
     this.editingConfiguration = copyMatchConfiguration(options.configuration)
+    this.servingTeamSwapped = false
     this.voiceSetupSnapshot = null
     this.phase = 'match'
     this.lastTranscript = ''
@@ -444,6 +446,40 @@ export class MatchController {
       this.startRecognition(false, 'MANUAL_CONFIGURATION_CHANGE')
     }
     this.emit()
+  }
+
+  updateDisplayName(team: TeamId, value: string): boolean {
+    const displayName = value.trim()
+    if (!displayName) return false
+    const key = team === 'A' ? 'teamA' : 'teamB'
+
+    if (this.phase === 'setup' || this.phase === 'voice-setup') {
+      this.editingConfiguration[key].displayName = displayName
+      this.editingRevision += 1
+      if (this.phase === 'voice-setup') {
+        this.voiceSetup.synchronizeConfiguration(this.editingConfiguration)
+        this.voiceSetupSnapshot = this.voiceSetup.getSnapshot()
+      }
+    } else if (this.configuration) {
+      this.configuration[key].displayName = displayName
+      this.editingConfiguration[key].displayName = displayName
+    } else {
+      return false
+    }
+
+    this.message = ''
+    this.emit()
+    return true
+  }
+
+  changeServingTeam(team: TeamId): boolean {
+    if (this.session.getSnapshot().state !== 'IN_PROGRESS') return false
+    const engineServingTeam = this.engine.getState().servingTeam
+    this.servingTeamSwapped = team !== engineServingTeam
+    const teamName = this.getPresentationDisplayState().teams[team].name
+    this.message = `Service : ${teamName}.`
+    this.emit()
+    return true
   }
 
   async handleTranscript(
@@ -825,6 +861,7 @@ export class MatchController {
     this.feedbackMode = 'NONE'
     this.configuration = null
     this.editingConfiguration = createDefaultMatchConfiguration()
+    this.servingTeamSwapped = false
     this.editingRevision += 1
     this.voiceSetupSnapshot = null
     this.lastExecutedVoiceCommand = null
@@ -1469,6 +1506,32 @@ export class MatchController {
   private emit(): void {
     const snapshot = this.getSnapshot()
     this.listeners.forEach((listener) => listener(snapshot))
+  }
+
+  private getPresentationDisplayState(): DisplayState {
+    const display = this.engine.getDisplayState()
+    const engineServingTeam = this.engine.getState().servingTeam
+    const servingTeam = this.servingTeamSwapped
+      ? engineServingTeam === 'A'
+        ? 'B'
+        : 'A'
+      : engineServingTeam
+
+    return {
+      ...display,
+      teams: {
+        A: {
+          ...display.teams.A,
+          name: this.configuration?.teamA.displayName ?? display.teams.A.name,
+          isServing: servingTeam === 'A',
+        },
+        B: {
+          ...display.teams.B,
+          name: this.configuration?.teamB.displayName ?? display.teams.B.name,
+          isServing: servingTeam === 'B',
+        },
+      },
+    }
   }
 
   private traceVoice(event: Omit<VoiceTraceEvent, 'at'>): void {

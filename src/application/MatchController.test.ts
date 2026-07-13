@@ -932,6 +932,77 @@ describe('MatchController', () => {
   })
 })
 
+describe('MatchController corrections visuelles du MLP', () => {
+  it('modifie le nom affiché pendant la configuration sans relancer le dialogue', async () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    await controller.startVoiceSetup()
+    const startsBeforeEdit = recognition.startCount
+
+    expect(controller.updateDisplayName('A', 'Les Champions')).toBe(true)
+
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.phase).toBe('voice-setup')
+    expect(snapshot.editingConfiguration.teamA.displayName).toBe(
+      'Les Champions',
+    )
+    expect(snapshot.editingConfiguration.teamA.voiceName).toBe('')
+    expect(recognition.startCount).toBe(startsBeforeEdit)
+  })
+
+  it('modifie uniquement le nom affiché pendant le match', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.startMatch({
+      configuration: {
+        teamA: { displayName: 'Champions', voiceName: 'Rouge' },
+        teamB: { displayName: 'Invincibles', voiceName: 'Bleu' },
+        servingTeam: 'A',
+      },
+    })
+
+    expect(controller.updateDisplayName('A', 'Les Rouges')).toBe(true)
+    await controller.handleTranscript({ transcript: 'Rouge' })
+
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.display.teams.A.name).toBe('Les Rouges')
+    expect(snapshot.configuration?.teamA.voiceName).toBe('Rouge')
+    expect(snapshot.display.teams.A.points).toBe('15')
+  })
+
+  it('change le serveur sans modifier le score', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    await controller.awardPoint('A')
+    const scoreBeforeChange = controller.getSnapshot().display
+
+    expect(controller.changeServingTeam('B')).toBe(true)
+
+    const changed = controller.getSnapshot().display
+    expect(changed.teams.A.points).toBe(scoreBeforeChange.teams.A.points)
+    expect(changed.teams.B.points).toBe(scoreBeforeChange.teams.B.points)
+    expect(changed.teams.A.games).toBe(scoreBeforeChange.teams.A.games)
+    expect(changed.teams.B.games).toBe(scoreBeforeChange.teams.B.games)
+    expect(changed.teams.A.isServing).toBe(false)
+    expect(changed.teams.B.isServing).toBe(true)
+
+    await controller.awardPoint('A')
+    await controller.awardPoint('A')
+    await controller.awardPoint('A')
+    const nextGame = controller.getSnapshot().display
+    expect(nextGame.teams.A.games).toBe(1)
+    expect(nextGame.teams.A.isServing).toBe(true)
+    expect(nextGame.teams.B.isServing).toBe(false)
+  })
+})
+
 describe('MatchController configuration', () => {
   it('utilise uniquement le nom vocal comme commande de point', async () => {
     const controller = new MatchController(

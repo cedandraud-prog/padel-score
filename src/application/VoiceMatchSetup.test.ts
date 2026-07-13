@@ -268,4 +268,16 @@ describe('VoiceMatchSetup', () => {
       createDefaultMatchConfiguration(),
     )
   })
+
+  it('capitalise automatiquement un nom affiché reconnu vocalement', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+
+    const result = setup.handle('marie-claire et élise')
+
+    expect(result.snapshot.configuration.teamA.displayName).toBe(
+      'Marie-Claire Et Élise',
+    )
+    expect(result.snapshot.step).toBe('team-a-voice-name')
+  })
 })

@@ -53,14 +53,39 @@ describe('MatchScreen', () => {
         onCorrect={() => undefined}
         onToggleListening={() => undefined}
         onNewMatch={() => undefined}
+        onDisplayNameChange={() => undefined}
+        onServingTeamChange={() => undefined}
       />,
     )
 
-    expect(html).toContain('<summary>Commandes vocales</summary>')
-    for (const { command, description } of MATCH_VOICE_COMMAND_HELP) {
+    expect(html).toContain('aria-label="Commandes vocales"')
+    for (const { command } of MATCH_VOICE_COMMAND_HELP) {
       expect(html).toContain(command)
-      expect(html).toContain(description)
     }
     expect(html).not.toContain('Recommencer')
+  })
+
+  it('rend les points, jeux, sets et le serveur immédiatement lisibles', () => {
+    const html = renderToStaticMarkup(
+      <MatchScreen
+        snapshot={snapshot}
+        onPoint={() => undefined}
+        onUndo={() => undefined}
+        onScore={() => undefined}
+        onFullScore={() => undefined}
+        onCorrect={() => undefined}
+        onToggleListening={() => undefined}
+        onNewMatch={() => undefined}
+        onDisplayNameChange={() => undefined}
+        onServingTeamChange={() => undefined}
+      />,
+    )
+
+    expect(html).toContain('aria-label="0 sets"')
+    expect(html).toContain('aria-label="0 jeux"')
+    expect(html).toContain('aria-label="0 points"')
+    expect(html).toContain('aria-label="Champions est au service"')
+    expect(html).toContain('aria-label="Donner le service à Invincibles"')
+    expect(html).toContain('Modifier le nom affiché de Champions')
   })
 })

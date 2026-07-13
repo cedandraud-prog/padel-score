@@ -12,6 +12,7 @@ describe('MatchSetup', () => {
         configuration={createDefaultMatchConfiguration()}
         voiceSetup={null}
         microphoneStatus="listening"
+        onDisplayNameChange={() => undefined}
         onVoiceSetup={() => undefined}
         onRestartConfiguration={() => undefined}
       />,
@@ -73,6 +74,7 @@ describe('MatchSetup', () => {
           configuration={voiceSetup.configuration}
           voiceSetup={voiceSetup}
           microphoneStatus="listening"
+          onDisplayNameChange={() => undefined}
           onVoiceSetup={() => undefined}
           onRestartConfiguration={() => undefined}
         />,
@@ -89,7 +91,7 @@ describe('MatchSetup', () => {
     }
   })
 
-  it('restitue les valeurs vocales sans les transformer en champs éditables', () => {
+  it('restitue les valeurs vocales avec une édition ciblée du nom affiché', () => {
     const setup = new VoiceMatchSetup()
     setup.start()
     setup.handle('Champions du monde très motivés')
@@ -101,12 +103,14 @@ describe('MatchSetup', () => {
         configuration={voiceSetup.configuration}
         voiceSetup={voiceSetup}
         microphoneStatus="speaking"
+        onDisplayNameChange={() => undefined}
         onVoiceSetup={() => undefined}
         onRestartConfiguration={() => undefined}
       />,
     )
 
-    expect(html).toContain('Champions du monde très motivés')
+    expect(html).toContain('Champions Du Monde Très Motivés')
+    expect(html).toContain('Modifier le nom affiché de l’équipe 1')
     expect(html).toContain('<output>Rouge</output>')
     expect(html).toContain('Annonce en cours')
     expect(html).not.toContain('<input')

@@ -2,13 +2,16 @@ import { useState } from 'react'
 import type { MicrophoneStatus } from '../application/MatchController'
 import type { MatchConfiguration } from '../application/matchConfiguration'
 import type { VoiceMatchSetupSnapshot } from '../application/VoiceMatchSetup'
+import type { TeamId } from '../core/matchTypes'
 import type { FeedbackMode } from '../voice/speechTypes'
+import { EditableDisplayName } from './EditableDisplayName'
 
 interface MatchSetupProps {
   message: string
   configuration: MatchConfiguration
   voiceSetup: VoiceMatchSetupSnapshot | null
   microphoneStatus: MicrophoneStatus
+  onDisplayNameChange(team: TeamId, value: string): void
   onVoiceSetup(feedbackMode: FeedbackMode): void
   onRestartConfiguration(): void
 }
@@ -32,6 +35,7 @@ export function MatchSetup({
   configuration,
   voiceSetup,
   microphoneStatus,
+  onDisplayNameChange,
   onVoiceSetup,
   onRestartConfiguration,
 }: MatchSetupProps) {
@@ -91,12 +95,15 @@ export function MatchSetup({
               <div>
                 <dt>Nom affiché</dt>
                 <dd>
-                  <output>
-                    {displayedValue(
-                      configuration.teamA.displayName,
-                      teamADisplayCaptured,
-                    )}
-                  </output>
+                  {teamADisplayCaptured ? (
+                    <EditableDisplayName
+                      value={configuration.teamA.displayName}
+                      teamLabel="l’équipe 1"
+                      onSave={(value) => onDisplayNameChange('A', value)}
+                    />
+                  ) : (
+                    <output>En attente…</output>
+                  )}
                 </dd>
               </div>
               <div>
@@ -118,12 +125,15 @@ export function MatchSetup({
               <div>
                 <dt>Nom affiché</dt>
                 <dd>
-                  <output>
-                    {displayedValue(
-                      configuration.teamB.displayName,
-                      teamBDisplayCaptured,
-                    )}
-                  </output>
+                  {teamBDisplayCaptured ? (
+                    <EditableDisplayName
+                      value={configuration.teamB.displayName}
+                      teamLabel="l’équipe 2"
+                      onSave={(value) => onDisplayNameChange('B', value)}
+                    />
+                  ) : (
+                    <output>En attente…</output>
+                  )}
                 </dd>
               </div>
               <div>

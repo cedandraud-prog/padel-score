@@ -90,6 +90,9 @@ export default function App() {
           configuration={snapshot.editingConfiguration}
           voiceSetup={snapshot.voiceSetup}
           microphoneStatus={snapshot.microphoneStatus}
+          onDisplayNameChange={(team, value) =>
+            controller.updateDisplayName(team, value)
+          }
           onVoiceSetup={(feedbackMode) =>
             void controller.startNewMatchVoiceSetup(feedbackMode)
           }
@@ -106,6 +109,10 @@ export default function App() {
             onCorrect={() => void controller.enterCorrection()}
             onToggleListening={() => controller.toggleListening()}
             onNewMatch={() => void controller.startNewMatchVoiceSetup()}
+            onDisplayNameChange={(team, value) =>
+              controller.updateDisplayName(team, value)
+            }
+            onServingTeamChange={(team) => controller.changeServingTeam(team)}
           />
           {snapshot.phase === 'correction' && (
             <CorrectionPanel
