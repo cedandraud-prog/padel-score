@@ -25,12 +25,17 @@ PADEL SCORE est une plateforme conversationnelle de suivi de match. Son cœur lo
 
 PADEL SCORE conserve le fil du match afin que les joueurs restent concentrés sur leur jeu.
 
+Vous choisissez votre matériel. PADEL SCORE s’adapte.
+
 Selon le contexte, il peut fonctionner :
 
 - sur le téléphone d’un joueur ;
+- avec les périphériques déjà possédés par le joueur ;
 - sur un terrain équipé ;
 - dans un club ;
 - dans une organisation de tournoi.
+
+Le matériel est un moyen interchangeable. Le produit commercial reste l’expérience PADEL SCORE.
 
 Le MLP actuel permet de concevoir, tester et valider le cœur du produit avant son déploiement sur les différentes architectures.
 
@@ -71,9 +76,12 @@ Toute évolution doit répondre à une question simple : aide-t-elle les joueurs
 Le cœur métier reste indépendant :
 
 - du matériel ;
+- du téléphone, du microphone, du haut-parleur, du casque et de la montre ;
 - du navigateur ;
 - du moteur de reconnaissance vocale ;
 - du mode de déploiement.
+
+PADEL SCORE optimise le matériel existant avant d’envisager un équipement propriétaire. Un futur POD peut enrichir l’expérience, mais ne devient jamais une obligation.
 
 ### Évolution par le terrain
 
@@ -95,11 +103,12 @@ PADEL SCORE est un système discret qui conserve le fil du match.
 Le même cœur logiciel pourra être déployé sous plusieurs formes :
 
 - PLAYER ;
-- AFFILIATED CLUB ;
-- PARTNER CLUB ;
+- CLUB READY ;
+- SMART COURT ;
+- SMART CLUB ;
 - TOURNAMENT.
 
-Cette vision est détaillée dans [ADR-007 — Stratégie de déploiement](adr/ADR-007-deployment-strategy.md).
+Cette vision est détaillée dans [ADR-007 — Stratégie de déploiement](adr/ADR-007-deployment-strategy.md) et actualisée par [ADR-008 — L’expérience prime sur le matériel](adr/ADR-008-experience-over-hardware.md).
 
 ## Conclusion
 

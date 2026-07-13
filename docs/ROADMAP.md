@@ -8,4 +8,21 @@
 - **Task 007** — Nom d’équipe unique, validation vocale exacte et indice de connexion Chrome.
 - **Task 007.1** — Nom affiché et nom vocal distincts avec parcours direct de validation.
 - **CAMP-001** — Validation de l’expérience pendant un vrai match.
-- Matériel dédié seulement après validation terrain.
+
+## Trajectoire produit
+
+```text
+PLAYER
+  ↓
+CLUB READY
+  ↓
+SMART COURT
+  ↓
+SMART CLUB
+  ↓
+TOURNAMENT
+```
+
+Le matériel évolue. Le cœur logiciel reste identique.
+
+PADEL SCORE privilégie d’abord le matériel déjà possédé par le joueur. Un matériel propriétaire ne sera envisagé que comme option premium, après validation terrain.
