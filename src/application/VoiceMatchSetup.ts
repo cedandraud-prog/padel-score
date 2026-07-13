@@ -138,6 +138,14 @@ export class VoiceMatchSetup {
     }
   }
 
+  restart(): VoiceSetupResult {
+    this.start(createDefaultMatchConfiguration())
+    return this.result(
+      'D’accord, recommençons la configuration. Nom de la première équipe ?',
+      'Dites le nom de la première équipe.',
+    )
+  }
+
   private captureDisplayName(
     team: TeamId,
     transcript: string,
@@ -151,14 +159,6 @@ export class VoiceMatchSetup {
     this.step = team === 'A' ? 'team-a-voice-name' : 'team-b-voice-name'
     const question = `Consigne vocale de l’équipe ${value} ?`
     return this.result(question, question)
-  }
-
-  private restart(): VoiceSetupResult {
-    this.start(createDefaultMatchConfiguration())
-    return this.result(
-      'D’accord, recommençons la configuration. Nom de la première équipe ?',
-      'Dites le nom de la première équipe.',
-    )
   }
 
   private captureVoiceName(team: TeamId, transcript: string): VoiceSetupResult {

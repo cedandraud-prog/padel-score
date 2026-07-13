@@ -42,6 +42,7 @@ export default function App() {
   )
 
   useEffect(() => {
+    controller.beginConfigurationExperience()
     const unsubscribe = controller.subscribe(setSnapshot)
     controller.listenForNewMatch()
     return () => {
@@ -92,6 +93,9 @@ export default function App() {
               }
               onVoiceSetup={(feedbackMode) =>
                 void controller.startNewMatchVoiceSetup(feedbackMode)
+              }
+              onRestartConfiguration={() =>
+                void controller.restartConfiguration()
               }
             />
           </div>

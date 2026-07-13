@@ -9,6 +9,7 @@ interface MatchSetupProps {
   voiceSetup: VoiceMatchSetupSnapshot | null
   onConfigurationChange(configuration: MatchConfiguration): void
   onVoiceSetup(feedbackMode: FeedbackMode): void
+  onRestartConfiguration(): void
 }
 
 export function MatchSetup({
@@ -17,6 +18,7 @@ export function MatchSetup({
   voiceSetup,
   onConfigurationChange,
   onVoiceSetup,
+  onRestartConfiguration,
 }: MatchSetupProps) {
   const [feedbackMode, setFeedbackMode] = useState<FeedbackMode>('BEEP')
 
@@ -25,8 +27,7 @@ export function MatchSetup({
       <h2 id="setup-title">Configurer le match</h2>
       <p className="setup-help">
         Dites <strong>« Nouveau match »</strong> pour lancer la configuration
-        vocale. Dites <strong>« Recommencer »</strong> pour effacer la
-        configuration en cours et reprendre depuis le début.
+        vocale.
       </p>
       <div className="setup-form">
         <label>
@@ -145,10 +146,25 @@ export function MatchSetup({
         </button>
       </div>
       {voiceSetup && (
-        <div aria-live="polite">
-          <h3>Configuration vocale</h3>
-          <p>{voiceSetup.prompt}</p>
-          {voiceSetup.message && <p className="error">{voiceSetup.message}</p>}
+        <div className="voice-setup-status">
+          <div aria-live="polite">
+            <h3>Configuration vocale</h3>
+            <p>{voiceSetup.prompt}</p>
+            {voiceSetup.message && (
+              <p className="error">{voiceSetup.message}</p>
+            )}
+          </div>
+          <button
+            className="restart-configuration"
+            type="button"
+            onClick={onRestartConfiguration}
+            aria-describedby="restart-configuration-help"
+          >
+            Recommencer
+          </button>
+          <small id="restart-configuration-help">
+            Efface la configuration en cours et reprend depuis le début.
+          </small>
         </div>
       )}
     </section>

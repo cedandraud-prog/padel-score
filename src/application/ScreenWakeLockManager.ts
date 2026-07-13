@@ -4,6 +4,9 @@ export const SCREEN_WAKE_LOCK_WARNING =
 export type ScreenWakeLockStatus =
   'inactive' | 'requesting' | 'active' | 'unavailable' | 'error'
 
+export type ScreenWakeLockReleaseReason =
+  'EXPERIENCE_INACTIVE' | 'SYSTEM' | 'DESTROY' | 'ACQUISITION_ABORTED'
+
 export interface ScreenWakeLockSnapshot {
   status: ScreenWakeLockStatus
   warning: string | null
@@ -11,7 +14,10 @@ export interface ScreenWakeLockSnapshot {
   requested: boolean
   acquired: boolean
   released: boolean
+  acquisitionCount: number
   releaseCount: number
+  lastReleaseReason: ScreenWakeLockReleaseReason | null
+  lastReleaseAt: number | null
 }
 
 export interface WakeLockSentinelAdapter {
@@ -56,7 +62,10 @@ export class ScreenWakeLockManager {
   private sentinel: WakeLockSentinelAdapter | null = null
   private acquisition: Promise<void> | null = null
   private matchActive = false
+  private acquisitionCount = 0
   private releaseCount = 0
+  private lastReleaseReason: ScreenWakeLockReleaseReason | null = null
+  private lastReleaseAt: number | null = null
   private destroyed = false
   private snapshot: ScreenWakeLockSnapshot = {
     status: 'inactive',
@@ -65,10 +74,16 @@ export class ScreenWakeLockManager {
     requested: false,
     acquired: false,
     released: false,
+    acquisitionCount: 0,
     releaseCount: 0,
+    lastReleaseReason: null,
+    lastReleaseAt: null,
   }
 
-  constructor(environment: ScreenWakeLockEnvironment = browserEnvironment()) {
+  constructor(
+    environment: ScreenWakeLockEnvironment = browserEnvironment(),
+    private readonly now: () => number = () => Date.now(),
+  ) {
     this.wakeLock = environment.wakeLock
     this.document = environment.document
     this.document.addEventListener('visibilitychange', this.handleVisibility)
@@ -81,7 +96,10 @@ export class ScreenWakeLockManager {
       requested: this.matchActive,
       acquired: this.sentinel !== null,
       released: this.sentinel === null && this.releaseCount > 0,
+      acquisitionCount: this.acquisitionCount,
       releaseCount: this.releaseCount,
+      lastReleaseReason: this.lastReleaseReason,
+      lastReleaseAt: this.lastReleaseAt,
     }
   }
 
@@ -100,7 +118,7 @@ export class ScreenWakeLockManager {
     this.matchActive = active
 
     if (!active) {
-      await this.release()
+      await this.release('EXPERIENCE_INACTIVE')
       this.updateSnapshot('inactive', null)
       return
     }
@@ -118,7 +136,7 @@ export class ScreenWakeLockManager {
     this.destroyed = true
     this.matchActive = false
     this.document.removeEventListener('visibilitychange', this.handleVisibility)
-    await this.release()
+    await this.release('DESTROY')
     this.listeners.clear()
   }
 
@@ -150,11 +168,13 @@ export class ScreenWakeLockManager {
   private async requestWakeLock(): Promise<void> {
     try {
       const sentinel = await this.wakeLock!.request('screen')
+      this.acquisitionCount += 1
       if (
         this.destroyed ||
         !this.matchActive ||
         this.document.visibilityState !== 'visible'
       ) {
+        this.recordRelease('ACQUISITION_ABORTED')
         await sentinel.release()
         return
       }
@@ -168,13 +188,13 @@ export class ScreenWakeLockManager {
     }
   }
 
-  private async release(): Promise<void> {
+  private async release(reason: ScreenWakeLockReleaseReason): Promise<void> {
     const sentinel = this.sentinel
     this.sentinel = null
     if (!sentinel) return
 
     sentinel.removeEventListener('release', this.handleSentinelRelease)
-    this.releaseCount += 1
+    this.recordRelease(reason)
     if (!sentinel.released) {
       try {
         await sentinel.release()
@@ -190,7 +210,7 @@ export class ScreenWakeLockManager {
 
     sentinel.removeEventListener('release', this.handleSentinelRelease)
     this.sentinel = null
-    this.releaseCount += 1
+    this.recordRelease('SYSTEM')
     if (!this.matchActive || this.destroyed) return
 
     this.updateSnapshot('inactive', null)
@@ -214,5 +234,11 @@ export class ScreenWakeLockManager {
     this.snapshot = { ...this.snapshot, status, warning }
     const snapshot = this.getSnapshot()
     this.listeners.forEach((listener) => listener(snapshot))
+  }
+
+  private recordRelease(reason: ScreenWakeLockReleaseReason): void {
+    this.releaseCount += 1
+    this.lastReleaseReason = reason
+    this.lastReleaseAt = this.now()
   }
 }

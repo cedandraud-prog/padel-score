@@ -273,6 +273,29 @@ fieldset {
   line-height: 1.45;
 }
 
+.voice-setup-status {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+}
+
+.restart-configuration {
+  min-height: 3rem;
+  border-color: #9b625d;
+  color: #ffd0cc;
+  background: transparent;
+  font-weight: 700;
+}
+
+.restart-configuration:hover:not(:disabled) {
+  background: #35211f;
+}
+
+.voice-setup-status small {
+  color: #afc0ba;
+  line-height: 1.4;
+}
+
 .voice-command-help {
   color: #c4d4cf;
 }

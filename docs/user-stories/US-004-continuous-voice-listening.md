@@ -28,6 +28,10 @@ La stratégie historique expose le cycle naturel de Chrome : une session termin�
 
 La stratégie continue masque les remplacements de sessions, conserve l’état fonctionnel d’écoute et temporise progressivement les échecs. Elle est utilisée par défaut.
 
+Elle ne supprime pas le son système éventuellement produit par Chrome Android lors de la création d’une nouvelle session de reconnaissance. Les essais terrain montrent que ce son disparaît en mode silencieux et revient lorsque le volume système est actif : il provient vraisemblablement de Chrome ou d’Android, pas de PADEL SCORE.
+
+Le mode `CONTINUOUS` masque uniquement les changements d’état visuels et maintient l’intention fonctionnelle d’écoute. Il ne promet pas une session Web Speech unique ni la suppression du bip système.
+
 Le choix est réservé au diagnostic développeur et mémorisé localement. Il ne modifie ni les commandes ni les règles du match.
 
 ## Comportement cible
@@ -35,7 +39,7 @@ Le choix est réservé au diagnostic développeur et mémorisé localement. Il n
 - L’indicateur reste « Écoute active » entre deux sessions techniques.
 - Une fin technique inattendue déclenche une relance courte et contrôlée.
 - Une seule session peut être active ou en démarrage.
-- Une relance technique ne rejoue ni bip ni annonce.
+- Une relance technique ne joue aucun son applicatif : ni bip de disponibilité, ni feedback de commande, ni annonce. Un éventuel bip Chrome ou Android reste hors du contrôle de l’application web.
 - Le contexte conversationnel, la configuration et le score courant sont conservés.
 - Un arrêt fonctionnel annule les timers et interdit toute relance.
 
@@ -85,6 +89,7 @@ L’écoute fonctionnelle s’arrête lors :
 7. Les timers sont nettoyés au démontage.
 8. La configuration, le dialogue et le score restent inchangés entre deux sessions techniques.
 9. Aucune règle de score n’est modifiée.
+10. Le diagnostic distingue la stratégie active et affiche les sessions créées, terminées, relancées, les erreurs et la dernière erreur.
 
 ## Protocole de comparaison terrain
 

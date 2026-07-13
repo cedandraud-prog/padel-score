@@ -45,19 +45,25 @@ class FakeSentinel implements WakeLockSentinelAdapter {
   }
 }
 
-function createHarness(sentinels = [new FakeSentinel()]) {
+function createHarness(
+  sentinels = [new FakeSentinel()],
+  now: () => number = () => 1_750_000_000_000,
+) {
   const document = new FakeDocument()
   const request = vi.fn<WakeLockAdapter['request']>()
   sentinels.forEach((sentinel) => request.mockResolvedValueOnce(sentinel))
-  const manager = new ScreenWakeLockManager({
-    document,
-    wakeLock: { request },
-  })
+  const manager = new ScreenWakeLockManager(
+    {
+      document,
+      wakeLock: { request },
+    },
+    now,
+  )
   return { document, manager, request, sentinels }
 }
 
 describe('ScreenWakeLockManager', () => {
-  it('acquiert un wake lock au démarrage effectif du match', async () => {
+  it('acquiert immédiatement un wake lock dès la configuration', async () => {
     const { manager, request } = createHarness()
 
     await manager.setMatchActive(true)
@@ -69,6 +75,7 @@ describe('ScreenWakeLockManager', () => {
       warning: null,
       requested: true,
       acquired: true,
+      acquisitionCount: 1,
     })
   })
 
@@ -86,7 +93,12 @@ describe('ScreenWakeLockManager', () => {
     await manager.setMatchActive(false)
 
     expect(sentinels[0].release).toHaveBeenCalledOnce()
-    expect(manager.getSnapshot().status).toBe('inactive')
+    expect(manager.getSnapshot()).toMatchObject({
+      status: 'inactive',
+      releaseCount: 1,
+      lastReleaseReason: 'EXPERIENCE_INACTIVE',
+      lastReleaseAt: 1_750_000_000_000,
+    })
   })
 
   it('libère le wake lock lors du démontage', async () => {
@@ -96,6 +108,7 @@ describe('ScreenWakeLockManager', () => {
     await manager.destroy()
 
     expect(sentinels[0].release).toHaveBeenCalledOnce()
+    expect(manager.getSnapshot().lastReleaseReason).toBe('DESTROY')
   })
 
   it('signale discrètement une API indisponible sans lever d’erreur', async () => {
@@ -133,6 +146,7 @@ describe('ScreenWakeLockManager', () => {
     sentinels[0].emitRelease()
 
     expect(manager.getSnapshot().status).toBe('inactive')
+    expect(manager.getSnapshot().lastReleaseReason).toBe('SYSTEM')
   })
 
   it('redemande un wake lock au retour au premier plan', async () => {
@@ -147,6 +161,11 @@ describe('ScreenWakeLockManager', () => {
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(2))
 
     expect(manager.getSnapshot().status).toBe('active')
+    expect(manager.getSnapshot()).toMatchObject({
+      acquisitionCount: 2,
+      releaseCount: 1,
+      lastReleaseReason: 'SYSTEM',
+    })
   })
 
   it('ne crée pas plusieurs wake locks simultanés', async () => {
@@ -192,5 +211,23 @@ describe('ScreenWakeLockManager', () => {
 
     expect(request).toHaveBeenCalledOnce()
     expect(sentinels[0].release).not.toHaveBeenCalled()
+  })
+
+  it('conserve le verrou pendant les annonces, relances et le passage au match', async () => {
+    const { manager, request, sentinels } = createHarness()
+    await manager.setExperienceActive(true)
+
+    await manager.setExperienceActive(true)
+    await manager.setExperienceActive(true)
+    await manager.setExperienceActive(true)
+
+    expect(request).toHaveBeenCalledOnce()
+    expect(sentinels[0].release).not.toHaveBeenCalled()
+    expect(manager.getSnapshot()).toMatchObject({
+      requested: true,
+      acquired: true,
+      acquisitionCount: 1,
+      releaseCount: 0,
+    })
   })
 })

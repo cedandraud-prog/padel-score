@@ -61,5 +61,6 @@ describe('MatchScreen', () => {
       expect(html).toContain(command)
       expect(html).toContain(description)
     }
+    expect(html).not.toContain('Recommencer')
   })
 })

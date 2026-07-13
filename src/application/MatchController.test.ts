@@ -87,6 +87,28 @@ class DeferredSynthesis extends MockSynthesis {
   }
 }
 
+class InterruptibleSynthesis extends MockSynthesis {
+  private pendingSpeech: (() => void) | null = null
+
+  override speak(text: string): Promise<void> {
+    this.spoken.push(text)
+    return new Promise((resolve) => {
+      this.pendingSpeech = resolve
+    })
+  }
+
+  override cancel(): void {
+    this.cancelCount += 1
+    this.pendingSpeech?.()
+    this.pendingSpeech = null
+  }
+
+  finishSpeech(): void {
+    this.pendingSpeech?.()
+    this.pendingSpeech = null
+  }
+}
+
 class MockFeedback implements CommandFeedbackAdapter {
   plays: Array<Exclude<FeedbackMode, 'NONE'>> = []
   disposeCount = 0
@@ -1003,6 +1025,130 @@ describe('MatchController configuration', () => {
     )
   })
 
+  it('le bouton tactile et la commande vocale utilisent le même redémarrage', async () => {
+    const voiceController = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    const touchController = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    await voiceController.startVoiceSetup()
+    await touchController.startVoiceSetup()
+    for (const transcript of ['Champions', 'Rouge', 'Rouge']) {
+      await voiceController.handleTranscript({ transcript })
+      await touchController.handleTranscript({ transcript })
+    }
+
+    await voiceController.handleTranscript({ transcript: 'Recommencer' })
+    await touchController.restartConfiguration()
+
+    expect(touchController.getSnapshot().voiceSetup).toEqual(
+      voiceController.getSnapshot().voiceSetup,
+    )
+    expect(touchController.getSnapshot().editingConfiguration).toEqual(
+      voiceController.getSnapshot().editingConfiguration,
+    )
+    expect(touchController.getSnapshot().experience).toEqual({
+      stage: 'CONFIGURING',
+      active: true,
+    })
+  })
+
+  it.each([
+    ['première question', []],
+    ['saisie de la consigne vocale', ['Champions']],
+    ['test de la consigne vocale', ['Champions', 'Rouge']],
+    [
+      'choix du serveur',
+      ['Champions', 'Rouge', 'Rouge', 'Baltringues', 'Bleu', 'Bleu'],
+    ],
+  ])('le bouton tactile recommence pendant %s', async (_label, transcripts) => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    await controller.startVoiceSetup()
+    for (const transcript of transcripts) {
+      await controller.handleTranscript({ transcript })
+    }
+
+    await controller.restartConfiguration()
+
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.phase).toBe('voice-setup')
+    expect(snapshot.voiceSetup?.step).toBe('team-a-display-name')
+    expect(snapshot.editingConfiguration).toEqual(
+      createDefaultMatchConfiguration(),
+    )
+    expect(snapshot.voiceSetup?.validatedVoiceNames).toEqual({
+      A: null,
+      B: null,
+    })
+    expect(snapshot.session.state).toBe('NOT_STARTED')
+  })
+
+  it('ignore un double clic rapide et ne relance l’écoute qu’une fois', async () => {
+    const recognition = new MockRecognition()
+    const synthesis = new DeferredSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+    const initialSetup = controller.startVoiceSetup()
+    synthesis.finishSpeech()
+    await initialSetup
+    const startsBeforeRestart = recognition.startCount
+
+    const firstRestart = controller.restartConfiguration()
+    const secondRestart = controller.restartConfiguration()
+
+    expect(secondRestart).toBe(firstRestart)
+    expect(
+      synthesis.spoken.filter((text) => text.startsWith('D’accord')),
+    ).toHaveLength(1)
+    synthesis.finishSpeech()
+    await Promise.all([firstRestart, secondRestart])
+    expect(recognition.startCount).toBe(startsBeforeRestart + 1)
+  })
+
+  it('interrompt l’annonce de l’étape en cours avant de recommencer', async () => {
+    const recognition = new MockRecognition()
+    const synthesis = new InterruptibleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+    const initialSetup = controller.startVoiceSetup()
+
+    const restart = controller.restartConfiguration()
+
+    expect(synthesis.cancelCount).toBe(1)
+    expect(synthesis.spoken).toEqual([
+      'Nom de la première équipe ?',
+      'D’accord, recommençons la configuration. Nom de la première équipe ?',
+    ])
+    synthesis.finishSpeech()
+    await Promise.all([initialSetup, restart])
+    expect(recognition.startCount).toBe(1)
+    expect(controller.getSnapshot().voiceSetup?.step).toBe(
+      'team-a-display-name',
+    )
+  })
+
+  it('ignore une transcription tardive de l’étape précédant le redémarrage', async () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    await controller.startVoiceSetup()
+    const staleHandlers = recognition.sessionHandlers.at(-1)
+
+    await controller.restartConfiguration()
+    staleHandlers?.onResult({ transcript: 'Ancienne réponse' })
+    await Promise.resolve()
+
+    const snapshot = controller.getSnapshot()
+    expect(snapshot.voiceSetup?.step).toBe('team-a-display-name')
+    expect(snapshot.editingConfiguration).toEqual(
+      createDefaultMatchConfiguration(),
+    )
+    expect(snapshot.lastCommand).toBe('Transcription vocale obsolète ignorée')
+  })
+
   it('Recommencer ne modifie pas un match déjà lancé', async () => {
     const { controller } = createController()
     await controller.awardPoint('A')
@@ -1345,14 +1491,15 @@ describe('MatchController écoute fonctionnellement continue', () => {
     vi.useRealTimers()
   })
 
-  it('ne rejoue pas le bip lors d’une relance purement technique', async () => {
+  it('ne joue aucun son applicatif lors d’une relance purement technique', async () => {
     vi.useFakeTimers()
     const recognition = new MockRecognition()
     const readiness = new MockReadinessCue()
+    const feedback = new MockFeedback()
     const controller = new MatchController(
       recognition,
       new MockSynthesis(),
-      undefined,
+      feedback,
       undefined,
       readiness,
     )
@@ -1365,6 +1512,7 @@ describe('MatchController écoute fonctionnellement continue', () => {
 
     expect(recognition.startCount).toBe(2)
     expect(readiness.playCount).toBe(1)
+    expect(feedback.plays).toEqual([])
     controller.destroy()
     vi.useRealTimers()
   })
@@ -1481,15 +1629,14 @@ describe('MatchController écoute fonctionnellement continue', () => {
 
 describe('MatchController expérience active', () => {
   it('active l’expérience dès la configuration', () => {
-    const controller = new MatchController(
-      new MockRecognition(),
-      new MockSynthesis(),
-    )
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
     controller.beginConfigurationExperience()
     expect(controller.getSnapshot().experience).toEqual({
       stage: 'CONFIGURING',
       active: true,
     })
+    expect(recognition.startCount).toBe(0)
   })
 
   it('reste active entre configuration et match', () => {

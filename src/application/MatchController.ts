@@ -177,6 +177,8 @@ export class MatchController {
   private pendingRecognitionIsTechnicalRestart = false
   private activeRecognitionAttempt: number | null = null
   private recognitionStartTimeout: ReturnType<typeof setTimeout> | null = null
+  private restartConfigurationPromise: Promise<void> | null = null
+  private announcementSequence = 0
   private consecutiveStartFailures = 0
   private consecutiveNetworkErrors = 0
   private recognitionLifecycle = 'Aucune tentative'
@@ -531,6 +533,10 @@ export class MatchController {
 
     if (this.phase === 'voice-setup') {
       if (resolveVoiceCommand(normalized)?.type === 'NEW_MATCH') return
+      if (normalized === 'recommencer') {
+        await this.restartConfiguration()
+        return
+      }
       await this.handleVoiceSetupTranscript(result.transcript)
       return
     }
@@ -809,6 +815,7 @@ export class MatchController {
 
   destroy(): void {
     this.disposed = true
+    this.announcementSequence += 1
     this.conversation.stop()
     this.continuousListening.dispose()
     this.clearRecognitionStartTimeout()
@@ -820,6 +827,23 @@ export class MatchController {
     this.readinessCue.dispose()
     this.connectionQuality.dispose()
     this.listeners.clear()
+  }
+
+  restartConfiguration(): Promise<void> {
+    if (this.phase !== 'voice-setup') return Promise.resolve()
+    if (this.restartConfigurationPromise) {
+      return this.restartConfigurationPromise
+    }
+
+    const restart = this.performRestartConfiguration()
+    this.restartConfigurationPromise = restart
+    const clearRestart = () => {
+      if (this.restartConfigurationPromise === restart) {
+        this.restartConfigurationPromise = null
+      }
+    }
+    void restart.then(clearRestart, clearRestart)
+    return restart
   }
 
   private async requestSessionFinish(): Promise<void> {
@@ -1034,6 +1058,31 @@ export class MatchController {
       await this.announce(result.announcement)
       return
     }
+    await this.announce(result.announcement, true)
+  }
+
+  private async performRestartConfiguration(): Promise<void> {
+    if (this.phase !== 'voice-setup') return
+
+    // Invalide les résultats et annonces de l'étape précédente avant le reset.
+    this.editingRevision += 1
+    this.announcementSequence += 1
+    this.synthesis.cancel()
+    this.cancelPendingRecognitionAttempt('Recommencer')
+    this.continuousListening.suspendTechnicalListening()
+    this.activeRecognitionAttempt = null
+    this.recognition.stop()
+
+    const result = this.voiceSetup.restart()
+    this.voiceSetupSnapshot = result.snapshot
+    this.editingConfiguration = copyMatchConfiguration(
+      result.snapshot.configuration,
+    )
+    this.lastCommand = 'Configuration recommencée'
+    this.message = ''
+    this.experience.beginConfiguration()
+    this.emit()
+
     await this.announce(result.announcement, true)
   }
 
@@ -1307,6 +1356,7 @@ export class MatchController {
   }
 
   private async announce(text: string, expectsResponse = false): Promise<void> {
+    const announcementId = ++this.announcementSequence
     this.conversation.beginAnnouncement(text, expectsResponse)
     this.microphoneStatus = 'speaking'
     this.continuousListening.suspendTechnicalListening()
@@ -1323,28 +1373,31 @@ export class MatchController {
       }
       if (text) await this.synthesis.speak(text)
     } catch (error) {
-      this.message =
-        error instanceof Error ? error.message : 'Erreur de synthèse vocale.'
-    } finally {
-      const intents = this.conversation.handleAnnouncementFinished()
-      if (
-        this.conversation.getSnapshot().isRunning &&
-        this.isListeningPhase() &&
-        this.recognition.isSupported
-      ) {
-        this.continuousListening.resumeTechnicalListening()
-        if (intents.some((intent) => intent.type === 'StartRecognition')) {
-          this.startRecognition()
-        }
-        this.emit()
-      } else {
-        this.microphoneStatus = this.recognition.isSupported
-          ? this.conversation.getSnapshot().isRunning
-            ? 'inactive'
-            : 'disabled'
-          : 'unavailable'
-        this.emit()
+      if (announcementId === this.announcementSequence) {
+        this.message =
+          error instanceof Error ? error.message : 'Erreur de synthèse vocale.'
       }
+    }
+
+    if (announcementId !== this.announcementSequence) return
+    const intents = this.conversation.handleAnnouncementFinished()
+    if (
+      this.conversation.getSnapshot().isRunning &&
+      this.isListeningPhase() &&
+      this.recognition.isSupported
+    ) {
+      this.continuousListening.resumeTechnicalListening()
+      if (intents.some((intent) => intent.type === 'StartRecognition')) {
+        this.startRecognition()
+      }
+      this.emit()
+    } else {
+      this.microphoneStatus = this.recognition.isSupported
+        ? this.conversation.getSnapshot().isRunning
+          ? 'inactive'
+          : 'disabled'
+        : 'unavailable'
+      this.emit()
     }
   }
 

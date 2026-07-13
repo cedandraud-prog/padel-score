@@ -41,16 +41,16 @@ contrôleur applicatif après validation complète de la configuration.
 
 ### Recommencer la configuration
 
-La page indique également :
+Pendant toute configuration vocale active, un bouton tactile secondaire
+« Recommencer » reste visible sous l'étape courante. Son aide précise :
 
-> Dites « Recommencer » pour effacer la configuration en cours et reprendre
-> depuis le début.
+> Efface la configuration en cours et reprend depuis le début.
 
-La commande est disponible à chaque étape avant le démarrage, notamment après
-un nom d'équipe mal reconnu, pendant la saisie d'une consigne vocale ou pendant
-le choix du serveur.
-
-Lorsqu'elle est reconnue par correspondance normalisée exacte :
+Le bouton « Recommencer » réinitialise entièrement la configuration sans
+quitter l'expérience en cours. Il devient le moyen principal de sortir d'un
+dialogue vocal bloqué et n'apparaît jamais sur l'écran de score. La commande
+vocale historique reste compatible, mais elle n'est plus présentée comme le
+moyen principal. Les deux entrées utilisent le même cas d'usage applicatif :
 
 - le brouillon et les validations temporaires sont effacés ;
 - le dialogue revient à la première question ;
@@ -58,7 +58,18 @@ Lorsqu'elle est reconnue par correspondance normalisée exacte :
 - l'ExperienceSession reste en configuration ;
 - l'écoute et le Wake Lock restent actifs ;
 - aucune nouvelle session concurrente n'est créée ;
+- un double appui rapide ne déclenche qu'un seul redémarrage ;
+- une transcription tardive de l'ancienne étape est ignorée ;
 - l'utilisateur ne revient pas à l'accueil et le match ne démarre pas.
+
+Après l'appui tactile, l'écoute de l'étape en cours est arrêtée, puis le système
+annonce exactement :
+
+> D'accord, recommençons la configuration. Nom de la première équipe ?
+
+La reconnaissance reprend une seule fois après la fin de cette annonce. Le
+Wake Lock reste actif parce que l'ExperienceSession demeure dans l'état
+`CONFIGURING`.
 
 ### Vocabulaire des équipes
 
@@ -137,18 +148,25 @@ reste utilisable.
 9. La sélection de voix reste limitée au diagnostic et au stockage local.
 10. Aucune règle de score n'est modifiée.
 11. Le bouton « Démarrer le match » n'apparaît plus sur la configuration.
-12. « Recommencer » fonctionne à toute étape de la configuration vocale.
+12. Le bouton « Recommencer » fonctionne à toute étape de la configuration vocale.
 13. Le brouillon est remis à zéro avant la reprise à la première question.
 14. L'ExperienceSession, l'écoute et le Wake Lock restent actifs.
 15. « Recommencer » n'a aucun effet sur un match déjà lancé.
+16. Le bouton tactile « Recommencer » est visible à chaque étape de la
+    configuration vocale et absent de l'écran de score.
+17. Le bouton et la commande vocale produisent exactement la même remise à zéro.
+18. Une ancienne transcription ne peut pas remplir le nouveau brouillon.
+19. Un double appui rapide ne produit qu'une annonce et une reprise d'écoute.
 
 ## Validation terrain attendue
 
 Le Human Validator vérifie sur le téléphone PLAYER :
 
 - la compréhension immédiate de « Consigne vocale » ;
-- la visibilité et la compréhension de la commande « Recommencer » ;
+- la visibilité et la compréhension du bouton « Recommencer » ;
 - la remise à zéro effective depuis plusieurs étapes du dialogue ;
+- l'accessibilité du bouton tactile d'une main sur le téléphone ;
+- l'absence de double annonce ou de double écoute après deux appuis rapides ;
 - les réponses par nom affiché et par consigne à « Qui sert ? » ;
 - le retour fluide au match après « Non » ;
 - la lisibilité de l'aide repliable pendant le jeu ;

@@ -22,6 +22,21 @@ const microphoneLabels = {
   error: 'Erreur microphone',
 } as const
 
+const wakeLockStatusLabels = {
+  inactive: 'inactif',
+  requesting: 'demandé',
+  active: 'acquis',
+  unavailable: 'indisponible',
+  error: 'erreur',
+} as const
+
+const wakeLockReleaseLabels = {
+  EXPERIENCE_INACTIVE: 'expérience inactive',
+  SYSTEM: 'Chrome / Android',
+  DESTROY: 'démontage',
+  ACQUISITION_ABORTED: 'acquisition devenue inutile',
+} as const
+
 interface VoiceSettingsDiagnosticProps {
   synthesis: SpeechSynthesisService
   announcementInProgress?: boolean
@@ -183,21 +198,89 @@ export function VoiceDiagnostics({
       </p>
       <dl>
         <div>
-          <dt>Wake Lock</dt>
+          <dt>ExperienceSession</dt>
+          <dd>{snapshot.experience.stage}</dd>
+        </div>
+        <div>
+          <dt>Experience Active</dt>
+          <dd>{snapshot.experience.active ? 'oui' : 'non'}</dd>
+        </div>
+        <div>
+          <dt>Wake Lock — état</dt>
+          <dd>{wakeLockStatusLabels[wakeLock.status]}</dd>
+        </div>
+        <div>
+          <dt>Wake Lock — API</dt>
+          <dd>{wakeLock.apiAvailable ? 'disponible' : 'indisponible'}</dd>
+        </div>
+        <div>
+          <dt>Wake Lock — demandé</dt>
+          <dd>{wakeLock.requested ? 'oui' : 'non'}</dd>
+        </div>
+        <div>
+          <dt>Wake Lock — acquis</dt>
+          <dd>{wakeLock.acquired ? 'oui' : 'non'}</dd>
+        </div>
+        <div>
+          <dt>Wake Lock — libéré</dt>
+          <dd>{wakeLock.released ? 'oui' : 'non'}</dd>
+        </div>
+        <div>
+          <dt>Acquisitions Wake Lock</dt>
+          <dd>{wakeLock.acquisitionCount}</dd>
+        </div>
+        <div>
+          <dt>Libérations Wake Lock</dt>
+          <dd>{wakeLock.releaseCount}</dd>
+        </div>
+        <div>
+          <dt>Origine dernière libération</dt>
           <dd>
-            API {wakeLock.apiAvailable ? 'disponible' : 'indisponible'} ·
-            demandé {wakeLock.requested ? 'oui' : 'non'} · acquis{' '}
-            {wakeLock.acquired ? 'oui' : 'non'} · libéré{' '}
-            {wakeLock.released ? 'oui' : 'non'} · libérations{' '}
-            {wakeLock.releaseCount}
+            {wakeLock.lastReleaseReason
+              ? wakeLockReleaseLabels[wakeLock.lastReleaseReason]
+              : '—'}
           </dd>
         </div>
-        {Object.entries(snapshot.voiceMetrics).map(([name, value]) => (
-          <div key={name}>
-            <dt>{name}</dt>
-            <dd>{value || '—'}</dd>
-          </div>
-        ))}
+        <div>
+          <dt>Horodatage dernière libération</dt>
+          <dd>
+            {wakeLock.lastReleaseAt === null
+              ? '—'
+              : new Date(wakeLock.lastReleaseAt).toISOString()}
+          </dd>
+        </div>
+        <div>
+          <dt>Stratégie de reconnaissance</dt>
+          <dd>{snapshot.listeningStrategy}</dd>
+        </div>
+        <div>
+          <dt>Sessions créées</dt>
+          <dd>{snapshot.voiceMetrics.sessionsCreated}</dd>
+        </div>
+        <div>
+          <dt>Sessions terminées</dt>
+          <dd>{snapshot.voiceMetrics.sessionsEnded}</dd>
+        </div>
+        <div>
+          <dt>Relances</dt>
+          <dd>{snapshot.voiceMetrics.restarts}</dd>
+        </div>
+        <div>
+          <dt>Erreurs</dt>
+          <dd>{snapshot.voiceMetrics.errors}</dd>
+        </div>
+        <div>
+          <dt>Commandes reconnues</dt>
+          <dd>{snapshot.voiceMetrics.commandsRecognized}</dd>
+        </div>
+        <div>
+          <dt>Commandes perdues</dt>
+          <dd>{snapshot.voiceMetrics.commandsLost}</dd>
+        </div>
+        <div>
+          <dt>Dernière erreur de reconnaissance</dt>
+          <dd>{snapshot.voiceMetrics.lastError || '—'}</dd>
+        </div>
         <div>
           <dt>Microphone</dt>
           <dd>{microphoneLabels[snapshot.microphoneStatus]}</dd>
