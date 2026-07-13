@@ -69,6 +69,14 @@ describe('VoiceSettingsDiagnostic', () => {
       },
       voiceTrace: [
         {
+          at: Date.parse('2026-07-13T12:00:00.500Z'),
+          type: 'ANNOUNCEMENT_STARTED',
+          origin: 'ANNOUNCEMENT_VOICE-SETUP',
+          attemptId: null,
+          announcementId: 3,
+          announcementType: 'RESPONSE_REQUIRED',
+        },
+        {
           at: Date.parse('2026-07-13T12:00:01.000Z'),
           type: 'START_CALLED',
           origin: 'CONTINUOUS_RESTART_TIMER',
@@ -148,6 +156,9 @@ describe('VoiceSettingsDiagnostic', () => {
     expect(html).toContain('Chrome / Android')
     expect(html).toContain('2026-07-13T12:00:00.000Z')
     expect(html).toContain('Trace vocale horodatée')
+    expect(html).toContain('ANNOUNCEMENT_STARTED')
+    expect(html).toContain('annonce 3')
+    expect(html).toContain('RESPONSE_REQUIRED')
     expect(html).toContain('CONTINUOUS_RESTART_TIMER')
     expect(html).toContain('READY_BEEP')
   })

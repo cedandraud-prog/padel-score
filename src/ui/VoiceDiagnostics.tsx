@@ -399,6 +399,10 @@ export function VoiceDiagnostics({
                 {event.attemptId === null
                   ? ''
                   : ` — tentative ${event.attemptId}`}
+                {event.announcementId === undefined
+                  ? ''
+                  : ` — annonce ${event.announcementId}`}
+                {event.announcementType ? ` — ${event.announcementType}` : ''}
                 {event.soundType ? ` — ${event.soundType}` : ''}
               </li>
             ))}

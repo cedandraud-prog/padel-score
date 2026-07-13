@@ -111,6 +111,31 @@ describe('ScreenWakeLockManager', () => {
     expect(manager.getSnapshot().lastReleaseReason).toBe('DESTROY')
   })
 
+  it('réacquiert avec une nouvelle instance après le cycle de nettoyage React', async () => {
+    const document = new FakeDocument()
+    const firstSentinel = new FakeSentinel()
+    const secondSentinel = new FakeSentinel()
+    const request = vi
+      .fn<WakeLockAdapter['request']>()
+      .mockResolvedValueOnce(firstSentinel)
+      .mockResolvedValueOnce(secondSentinel)
+    const environment = { document, wakeLock: { request } }
+    const firstManager = new ScreenWakeLockManager(environment)
+
+    await firstManager.setExperienceActive(true)
+    await firstManager.destroy()
+
+    const activeManager = new ScreenWakeLockManager(environment)
+    await activeManager.setExperienceActive(true)
+
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(activeManager.getSnapshot()).toMatchObject({
+      requested: true,
+      acquired: true,
+      status: 'active',
+    })
+  })
+
   it('signale discrètement une API indisponible sans lever d’erreur', async () => {
     const manager = new ScreenWakeLockManager({
       document: new FakeDocument(),

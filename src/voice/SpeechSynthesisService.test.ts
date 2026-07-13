@@ -34,6 +34,7 @@ function createHarness() {
     cancel: vi.fn(),
     speak: vi.fn((utterance: SpeechSynthesisUtterance) => {
       utterances.push(utterance)
+      utterance.onstart?.({} as SpeechSynthesisEvent)
       utterance.onend?.({} as SpeechSynthesisEvent)
     }),
     addEventListener: vi.fn(),
@@ -92,5 +93,17 @@ describe('SpeechSynthesisService', () => {
     await service.testVoice('french-b')
     expect(utterances[0].text).toBe('Test de la voix PADEL SCORE.')
     expect(utterances[0].voice?.voiceURI).toBe('french-b')
+  })
+
+  it('signale le démarrage et la fin réels de l’annonce', async () => {
+    const { service } = createHarness()
+    const events: string[] = []
+
+    await service.speak('Nouveau score', {
+      onStarted: () => events.push('started'),
+      onEnded: () => events.push('ended'),
+    })
+
+    expect(events).toEqual(['started', 'ended'])
   })
 })

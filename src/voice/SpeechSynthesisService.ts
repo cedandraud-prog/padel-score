@@ -1,4 +1,4 @@
-import type { SynthesisAdapter } from './speechTypes'
+import type { SynthesisAdapter, SynthesisLifecycle } from './speechTypes'
 
 const VOICE_STORAGE_KEY = 'padel-score.speech-voice'
 
@@ -49,6 +49,7 @@ function toOption(voice: SpeechSynthesisVoice): SpeechVoiceOption {
 
 export class SpeechSynthesisService implements SynthesisAdapter {
   readonly isSupported: boolean
+  private cancelActiveSpeech: (() => void) | null = null
 
   constructor(
     private readonly synthesis = browserSynthesis(),
@@ -90,8 +91,8 @@ export class SpeechSynthesisService implements SynthesisAdapter {
     return () => this.synthesis?.removeEventListener('voiceschanged', listener)
   }
 
-  speak(text: string): Promise<void> {
-    return this.speakWithVoice(text, this.resolveVoice())
+  speak(text: string, lifecycle?: SynthesisLifecycle): Promise<void> {
+    return this.speakWithVoice(text, this.resolveVoice(), lifecycle)
   }
 
   testVoice(id: string): Promise<void> {
@@ -105,6 +106,7 @@ export class SpeechSynthesisService implements SynthesisAdapter {
   }
 
   cancel(): void {
+    this.cancelActiveSpeech?.()
     this.synthesis?.cancel()
   }
 
@@ -136,12 +138,15 @@ export class SpeechSynthesisService implements SynthesisAdapter {
   private speakWithVoice(
     text: string,
     voice: SpeechSynthesisVoice | null,
+    lifecycle?: SynthesisLifecycle,
   ): Promise<void> {
     if (!this.isSupported || !this.synthesis || !this.utteranceFactory) {
       return Promise.reject(
         new Error('Synthèse vocale indisponible dans ce navigateur.'),
       )
     }
+
+    this.cancel()
 
     return new Promise((resolve, reject) => {
       const utterance = this.utteranceFactory?.(text)
@@ -151,10 +156,32 @@ export class SpeechSynthesisService implements SynthesisAdapter {
       }
       utterance.lang = 'fr-FR'
       if (voice) utterance.voice = voice
-      utterance.onend = () => resolve()
-      utterance.onerror = (event) =>
-        reject(new Error(`Erreur de synthèse vocale : ${event.error}.`))
-      this.synthesis?.cancel()
+      let settled = false
+      const finish = (callback: () => void, error?: Error) => {
+        if (settled) return
+        settled = true
+        if (this.cancelActiveSpeech === cancelSpeech) {
+          this.cancelActiveSpeech = null
+        }
+        callback()
+        if (error) reject(error)
+        else resolve()
+      }
+      const cancelSpeech = () => finish(() => lifecycle?.onCancelled?.())
+
+      this.cancelActiveSpeech = cancelSpeech
+      utterance.onstart = () => lifecycle?.onStarted?.()
+      utterance.onend = () => finish(() => lifecycle?.onEnded?.())
+      utterance.onerror = (event) => {
+        if (event.error === 'canceled' || event.error === 'interrupted') {
+          finish(() => lifecycle?.onCancelled?.())
+          return
+        }
+        finish(
+          () => lifecycle?.onError?.(event.error),
+          new Error(`Erreur de synthèse vocale : ${event.error}.`),
+        )
+      }
       this.synthesis?.speak(utterance)
     })
   }

@@ -65,16 +65,25 @@ export interface VoiceRuntimeMetrics {
 
 export type VoiceTraceEventType =
   | 'START_CALLED'
+  | 'RECOGNITION_START_REQUESTED'
   | 'ONSTART'
   | 'ONEND'
   | 'RESTART_REQUESTED'
   | 'APPLICATION_SOUND'
+  | 'ANNOUNCEMENT_REQUESTED'
+  | 'ANNOUNCEMENT_STARTED'
+  | 'ANNOUNCEMENT_ENDED'
+  | 'ANNOUNCEMENT_ERROR'
+  | 'ANNOUNCEMENT_CANCELLED'
+  | 'ANNOUNCEMENT_TIMEOUT'
 
 export interface VoiceTraceEvent {
   at: number
   type: VoiceTraceEventType
   origin: string
   attemptId: number | null
+  announcementId?: number
+  announcementType?: 'RESPONSE_REQUIRED' | 'INFORMATION'
   soundType?: 'READY_BEEP' | 'COMMAND_BEEP' | 'COMMAND_OK' | 'ANNOUNCEMENT'
 }
 
@@ -141,6 +150,15 @@ export interface StartMatchOptions {
 type Listener = (snapshot: MatchControllerSnapshot) => void
 
 const DUPLICATE_WINDOW_MS = 1_500
+const MINIMUM_ANNOUNCEMENT_TIMEOUT_MS = 4_000
+const MAXIMUM_ANNOUNCEMENT_TIMEOUT_MS = 15_000
+
+export function announcementSafetyTimeoutMs(text: string): number {
+  return Math.min(
+    MAXIMUM_ANNOUNCEMENT_TIMEOUT_MS,
+    Math.max(MINIMUM_ANNOUNCEMENT_TIMEOUT_MS, 3_000 + text.length * 80),
+  )
+}
 
 const NOOP_FEEDBACK: CommandFeedbackAdapter = {
   prepare() {},
@@ -1392,6 +1410,11 @@ export class MatchController {
       origin,
       attemptId,
     })
+    this.traceVoice({
+      type: 'RECOGNITION_START_REQUESTED',
+      origin,
+      attemptId,
+    })
     this.recognition.start(
       this.recognitionHandlers(this.editingRevision, attemptId),
     )
@@ -1505,6 +1528,38 @@ export class MatchController {
 
   private async announce(text: string, expectsResponse = false): Promise<void> {
     const announcementId = ++this.announcementSequence
+    const announcementType = expectsResponse
+      ? ('RESPONSE_REQUIRED' as const)
+      : ('INFORMATION' as const)
+    const origin = `ANNOUNCEMENT_${this.phase.toUpperCase()}`
+    let terminalEventRecorded = false
+    let safetyTimeout: ReturnType<typeof setTimeout> | null = null
+    const traceAnnouncement = (
+      type:
+        | 'ANNOUNCEMENT_REQUESTED'
+        | 'ANNOUNCEMENT_STARTED'
+        | 'ANNOUNCEMENT_ENDED'
+        | 'ANNOUNCEMENT_ERROR'
+        | 'ANNOUNCEMENT_CANCELLED'
+        | 'ANNOUNCEMENT_TIMEOUT',
+    ) => {
+      if (
+        type !== 'ANNOUNCEMENT_REQUESTED' &&
+        type !== 'ANNOUNCEMENT_STARTED'
+      ) {
+        if (terminalEventRecorded) return
+        terminalEventRecorded = true
+      }
+      this.traceVoice({
+        type,
+        origin,
+        attemptId: null,
+        announcementId,
+        announcementType,
+      })
+    }
+
+    traceAnnouncement('ANNOUNCEMENT_REQUESTED')
     this.conversation.beginAnnouncement(text, expectsResponse)
     this.microphoneStatus = 'speaking'
     this.continuousListening.suspendTechnicalListening()
@@ -1522,17 +1577,41 @@ export class MatchController {
       if (text) {
         this.traceVoice({
           type: 'APPLICATION_SOUND',
-          origin: `ANNOUNCEMENT_${this.phase.toUpperCase()}`,
+          origin,
           attemptId: null,
+          announcementId,
+          announcementType,
           soundType: 'ANNOUNCEMENT',
         })
-        await this.synthesis.speak(text)
+        await Promise.race([
+          this.synthesis.speak(text, {
+            onStarted: () => {
+              if (announcementId === this.announcementSequence) {
+                traceAnnouncement('ANNOUNCEMENT_STARTED')
+              }
+            },
+            onEnded: () => traceAnnouncement('ANNOUNCEMENT_ENDED'),
+            onError: () => traceAnnouncement('ANNOUNCEMENT_ERROR'),
+            onCancelled: () => traceAnnouncement('ANNOUNCEMENT_CANCELLED'),
+          }),
+          new Promise<void>((resolve) => {
+            safetyTimeout = setTimeout(() => {
+              traceAnnouncement('ANNOUNCEMENT_TIMEOUT')
+              this.synthesis.cancel()
+              resolve()
+            }, announcementSafetyTimeoutMs(text))
+          }),
+        ])
+        if (!terminalEventRecorded) traceAnnouncement('ANNOUNCEMENT_ENDED')
       }
     } catch (error) {
+      traceAnnouncement('ANNOUNCEMENT_ERROR')
       if (announcementId === this.announcementSequence) {
         this.message =
           error instanceof Error ? error.message : 'Erreur de synthèse vocale.'
       }
+    } finally {
+      if (safetyTimeout !== null) clearTimeout(safetyTimeout)
     }
 
     if (announcementId !== this.announcementSequence) return

@@ -5,9 +5,10 @@ import type {
   RecognitionAdapter,
   RecognitionHandlers,
   ReadinessCueAdapter,
+  SynthesisLifecycle,
   SynthesisAdapter,
 } from '../voice/speechTypes'
-import { MatchController } from './MatchController'
+import { announcementSafetyTimeoutMs, MatchController } from './MatchController'
 import {
   createDefaultMatchConfiguration,
   type MatchConfiguration,
@@ -106,6 +107,45 @@ class InterruptibleSynthesis extends MockSynthesis {
   finishSpeech(): void {
     this.pendingSpeech?.()
     this.pendingSpeech = null
+  }
+}
+
+class LifecycleSynthesis extends MockSynthesis {
+  private lifecycle: SynthesisLifecycle | undefined
+  private resolveSpeech: (() => void) | null = null
+  private rejectSpeech: ((error: Error) => void) | null = null
+
+  override speak(text: string, lifecycle?: SynthesisLifecycle): Promise<void> {
+    this.spoken.push(text)
+    this.lifecycle = lifecycle
+    lifecycle?.onStarted?.()
+    return new Promise((resolve, reject) => {
+      this.resolveSpeech = resolve
+      this.rejectSpeech = reject
+    })
+  }
+
+  finishSpeech(): void {
+    this.lifecycle?.onEnded?.()
+    this.resolveSpeech?.()
+    this.clearPending()
+  }
+
+  failSpeech(): void {
+    this.lifecycle?.onError?.('synthesis-failed')
+    this.rejectSpeech?.(new Error('Erreur de synthèse vocale.'))
+    this.clearPending()
+  }
+
+  override cancel(): void {
+    this.cancelCount += 1
+    this.lifecycle?.onCancelled?.()
+    this.resolveSpeech?.()
+  }
+
+  private clearPending(): void {
+    this.resolveSpeech = null
+    this.rejectSpeech = null
   }
 }
 
@@ -1447,6 +1487,123 @@ describe('MatchController configuration', () => {
   })
 })
 
+describe('MatchController sortie robuste des annonces', () => {
+  it('onend déclenche exactement un démarrage de reconnaissance', async () => {
+    const recognition = new MockRecognition(true, false)
+    const synthesis = new LifecycleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+
+    const setup = controller.startVoiceSetup()
+    synthesis.finishSpeech()
+    await setup
+
+    expect(recognition.startCount).toBe(1)
+    expect(controller.getSnapshot().voiceTrace.map(({ type }) => type)).toEqual(
+      expect.arrayContaining([
+        'ANNOUNCEMENT_REQUESTED',
+        'ANNOUNCEMENT_STARTED',
+        'ANNOUNCEMENT_ENDED',
+        'RECOGNITION_START_REQUESTED',
+      ]),
+    )
+  })
+
+  it('onerror poursuit le parcours de manière contrôlée', async () => {
+    const recognition = new MockRecognition(true, false)
+    const synthesis = new LifecycleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+
+    const setup = controller.startVoiceSetup()
+    synthesis.failSpeech()
+    await setup
+
+    expect(recognition.startCount).toBe(1)
+    expect(controller.getSnapshot().voiceTrace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'ANNOUNCEMENT_ERROR' }),
+        expect.objectContaining({ type: 'RECOGNITION_START_REQUESTED' }),
+      ]),
+    )
+  })
+
+  it('le timeout de sécurité débloque une annonce sans onend', async () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition(true, false)
+    const synthesis = new LifecycleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+
+    const setup = controller.startVoiceSetup()
+    const timeout = announcementSafetyTimeoutMs(synthesis.spoken[0])
+    await vi.advanceTimersByTimeAsync(timeout)
+    await setup
+
+    expect(recognition.startCount).toBe(1)
+    expect(controller.getSnapshot().voiceTrace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'ANNOUNCEMENT_TIMEOUT' }),
+        expect.objectContaining({ type: 'RECOGNITION_START_REQUESTED' }),
+      ]),
+    )
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('ignore un onend tardif après timeout et ne redémarre pas deux fois', async () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition(true, false)
+    const synthesis = new LifecycleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+
+    const setup = controller.startVoiceSetup()
+    await vi.advanceTimersByTimeAsync(
+      announcementSafetyTimeoutMs(synthesis.spoken[0]),
+    )
+    await setup
+    synthesis.finishSpeech()
+
+    expect(recognition.startCount).toBe(1)
+    expect(
+      controller
+        .getSnapshot()
+        .voiceTrace.filter(
+          ({ type }) => type === 'RECOGNITION_START_REQUESTED',
+        ),
+    ).toHaveLength(1)
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('une annulation d’annonce ne bloque pas la reprise', async () => {
+    const recognition = new MockRecognition(true, false)
+    const synthesis = new LifecycleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+
+    const setup = controller.startVoiceSetup()
+    synthesis.cancel()
+    await setup
+
+    expect(recognition.startCount).toBe(1)
+    expect(controller.getSnapshot().voiceTrace).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'ANNOUNCEMENT_CANCELLED' }),
+      ]),
+    )
+  })
+
+  it('deux annonces concurrentes ne créent qu’une session utile', async () => {
+    const recognition = new MockRecognition(true, false)
+    const synthesis = new LifecycleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+
+    const initialSetup = controller.startVoiceSetup()
+    const restart = controller.restartConfiguration()
+    synthesis.finishSpeech()
+    await Promise.all([initialSetup, restart])
+
+    expect(recognition.startCount).toBe(1)
+  })
+})
+
 describe('MatchController démarrage réel de la reconnaissance', () => {
   it('reste sans erreur et sans bip avant onstart', () => {
     const recognition = new MockRecognition(true, false)
@@ -1601,6 +1758,11 @@ describe('MatchController écoute fonctionnellement continue', () => {
         origin: 'LEGACY_ONEND',
         attemptId: 2,
       }),
+      expect.objectContaining({
+        type: 'RECOGNITION_START_REQUESTED',
+        origin: 'LEGACY_ONEND',
+        attemptId: 2,
+      }),
       expect.objectContaining({ type: 'ONSTART', attemptId: 2 }),
     ])
     expect(
@@ -1664,6 +1826,11 @@ describe('MatchController écoute fonctionnellement continue', () => {
       }),
       expect.objectContaining({
         type: 'START_CALLED',
+        origin: 'CONTINUOUS_RESTART_TIMER',
+        attemptId: 2,
+      }),
+      expect.objectContaining({
+        type: 'RECOGNITION_START_REQUESTED',
         origin: 'CONTINUOUS_RESTART_TIMER',
         attemptId: 2,
       }),

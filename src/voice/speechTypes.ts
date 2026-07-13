@@ -50,8 +50,15 @@ export interface RecognitionAdapter {
 
 export interface SynthesisAdapter {
   readonly isSupported: boolean
-  speak(text: string): Promise<void>
+  speak(text: string, lifecycle?: SynthesisLifecycle): Promise<void>
   cancel(): void
+}
+
+export interface SynthesisLifecycle {
+  onStarted?(): void
+  onEnded?(): void
+  onError?(error: string): void
+  onCancelled?(): void
 }
 
 export type FeedbackMode = 'BEEP' | 'OK' | 'NONE'

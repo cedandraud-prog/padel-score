@@ -12,6 +12,7 @@ import { SpeechSynthesisService } from './voice/SpeechSynthesisService'
 import { CommandFeedbackService } from './voice/CommandFeedbackService'
 import { ReadinessCueService } from './voice/ReadinessCueService'
 import { ScreenWakeLockManager } from './application/ScreenWakeLockManager'
+import type { ScreenWakeLockSnapshot } from './application/ScreenWakeLockManager'
 import { WakeLockWarning } from './ui/WakeLockWarning'
 import { browserListeningStrategyStore } from './voice/ListeningStrategy'
 
@@ -22,50 +23,62 @@ const diagnosticsEnabled = new URLSearchParams(window.location.search).has(
 
 export default function App() {
   const [synthesis] = useState(() => new SpeechSynthesisService())
-  const [controller] = useState(
-    () =>
-      new MatchController(
-        new SpeechRecognitionService(),
-        synthesis,
-        new CommandFeedbackService(synthesis),
-        undefined,
-        new ReadinessCueService(),
-        strategyStore.load(),
-      ),
-  )
-  const [snapshot, setSnapshot] = useState<MatchControllerSnapshot>(() =>
-    controller.getSnapshot(),
-  )
-  const [wakeLockManager] = useState(() => new ScreenWakeLockManager())
-  const [wakeLockSnapshot, setWakeLockSnapshot] = useState(() =>
-    wakeLockManager.getSnapshot(),
-  )
+  const [controller, setController] = useState<MatchController | null>(null)
+  const [snapshot, setSnapshot] = useState<MatchControllerSnapshot | null>(null)
+  const [wakeLockManager, setWakeLockManager] =
+    useState<ScreenWakeLockManager | null>(null)
+  const [wakeLockSnapshot, setWakeLockSnapshot] =
+    useState<ScreenWakeLockSnapshot>({
+      status: 'inactive',
+      warning: null,
+      apiAvailable: false,
+      requested: false,
+      acquired: false,
+      released: false,
+      acquisitionCount: 0,
+      releaseCount: 0,
+      lastReleaseReason: null,
+      lastReleaseAt: null,
+    })
 
   useEffect(() => {
-    controller.beginConfigurationExperience()
-    const unsubscribe = controller.subscribe(setSnapshot)
-    controller.listenForNewMatch()
+    const activeController = new MatchController(
+      new SpeechRecognitionService(),
+      synthesis,
+      new CommandFeedbackService(synthesis),
+      undefined,
+      new ReadinessCueService(),
+      strategyStore.load(),
+    )
+    activeController.beginConfigurationExperience()
+    const unsubscribe = activeController.subscribe(setSnapshot)
+    setController(activeController)
+    activeController.listenForNewMatch()
     return () => {
       unsubscribe()
-      controller.destroy()
+      activeController.destroy()
     }
-  }, [controller])
-
-  useEffect(
-    () => wakeLockManager.subscribe(setWakeLockSnapshot),
-    [wakeLockManager],
-  )
+  }, [synthesis])
 
   useEffect(() => {
-    void wakeLockManager.setExperienceActive(snapshot.experience.active)
-  }, [snapshot.experience.active, wakeLockManager])
+    const manager = new ScreenWakeLockManager()
+    const unsubscribe = manager.subscribe(setWakeLockSnapshot)
+    setWakeLockManager(manager)
+    return () => {
+      unsubscribe()
+      void manager.destroy()
+    }
+  }, [])
 
-  useEffect(
-    () => () => {
-      void wakeLockManager.destroy()
-    },
-    [wakeLockManager],
-  )
+  useEffect(() => {
+    if (wakeLockManager) {
+      void wakeLockManager.setExperienceActive(
+        snapshot?.experience.active ?? false,
+      )
+    }
+  }, [snapshot?.experience.active, wakeLockManager])
+
+  if (!controller || !snapshot) return null
 
   const isMatchSetup =
     snapshot.phase === 'setup' || snapshot.phase === 'voice-setup'
@@ -80,7 +93,7 @@ export default function App() {
       {wakeLockSnapshot.warning && (
         <WakeLockWarning
           message={wakeLockSnapshot.warning}
-          onDismiss={() => wakeLockManager.dismissWarning()}
+          onDismiss={() => wakeLockManager?.dismissWarning()}
         />
       )}
 
