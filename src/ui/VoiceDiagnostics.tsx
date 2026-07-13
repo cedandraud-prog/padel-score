@@ -1,7 +1,12 @@
 import type { MatchControllerSnapshot } from '../application/MatchController'
+import type { ScreenWakeLockSnapshot } from '../application/ScreenWakeLockManager'
+import type { ListeningStrategy } from '../voice/ListeningStrategy'
 
 interface VoiceDiagnosticsProps {
   snapshot: MatchControllerSnapshot
+  wakeLock: ScreenWakeLockSnapshot
+  onStrategyChange(strategy: ListeningStrategy): void
+  onReset(): void
 }
 
 const microphoneLabels = {
@@ -14,7 +19,12 @@ const microphoneLabels = {
   error: 'Erreur microphone',
 } as const
 
-export function VoiceDiagnostics({ snapshot }: VoiceDiagnosticsProps) {
+export function VoiceDiagnostics({
+  snapshot,
+  wakeLock,
+  onStrategyChange,
+  onReset,
+}: VoiceDiagnosticsProps) {
   const recognition = snapshot.recognitionDiagnostics
   const connection = snapshot.connectionQuality
 
@@ -24,6 +34,23 @@ export function VoiceDiagnostics({ snapshot }: VoiceDiagnosticsProps) {
       open={snapshot.microphoneStatus === 'error'}
     >
       <summary>Diagnostic vocal</summary>
+      <div className="button-row">
+        <label>
+          Stratégie d’écoute
+          <select
+            value={snapshot.listeningStrategy}
+            onChange={(event) =>
+              onStrategyChange(event.target.value as ListeningStrategy)
+            }
+          >
+            <option value="LEGACY">LEGACY</option>
+            <option value="CONTINUOUS">CONTINUOUS</option>
+          </select>
+        </label>
+        <button type="button" onClick={onReset}>
+          Remise à zéro
+        </button>
+      </div>
       <p>
         Connexion Chrome : <strong>{connection.quality}</strong>
         <br />
@@ -64,6 +91,22 @@ export function VoiceDiagnostics({ snapshot }: VoiceDiagnosticsProps) {
       </p>
       <dl>
         <div>
+          <dt>Wake Lock</dt>
+          <dd>
+            API {wakeLock.apiAvailable ? 'disponible' : 'indisponible'} ·
+            demandé {wakeLock.requested ? 'oui' : 'non'} · acquis{' '}
+            {wakeLock.acquired ? 'oui' : 'non'} · libéré{' '}
+            {wakeLock.released ? 'oui' : 'non'} · libérations{' '}
+            {wakeLock.releaseCount}
+          </dd>
+        </div>
+        {Object.entries(snapshot.voiceMetrics).map(([name, value]) => (
+          <div key={name}>
+            <dt>{name}</dt>
+            <dd>{value || '—'}</dd>
+          </div>
+        ))}
+        <div>
           <dt>Microphone</dt>
           <dd>{microphoneLabels[snapshot.microphoneStatus]}</dd>
         </div>
@@ -94,6 +137,30 @@ export function VoiceDiagnostics({ snapshot }: VoiceDiagnosticsProps) {
         <div>
           <dt>Cycle de reconnaissance</dt>
           <dd>{snapshot.recognitionLifecycle}</dd>
+        </div>
+        <div>
+          <dt>Intention d’écoute</dt>
+          <dd>
+            {snapshot.continuousListening.shouldListen ? 'active' : 'arrêtée'}
+          </dd>
+        </div>
+        <div>
+          <dt>Session technique</dt>
+          <dd>
+            {snapshot.continuousListening.recognitionRunning
+              ? 'active'
+              : snapshot.continuousListening.startPending
+                ? 'démarrage'
+                : 'inactive'}
+          </dd>
+        </div>
+        <div>
+          <dt>Relance technique</dt>
+          <dd>
+            {snapshot.continuousListening.restartPending
+              ? 'planifiée'
+              : 'aucune'}
+          </dd>
         </div>
         <div>
           <dt>Feedback de commande</dt>

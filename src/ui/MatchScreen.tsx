@@ -1,6 +1,5 @@
 import type { MatchControllerSnapshot } from '../application/MatchController'
 import type { TeamId } from '../core/matchTypes'
-import { VoiceDiagnostics } from './VoiceDiagnostics'
 
 interface MatchScreenProps {
   snapshot: MatchControllerSnapshot
@@ -115,8 +114,6 @@ export function MatchScreen({
           </button>
         )}
       </section>
-
-      <VoiceDiagnostics snapshot={snapshot} />
     </>
   )
 }

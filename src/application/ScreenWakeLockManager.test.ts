@@ -64,7 +64,12 @@ describe('ScreenWakeLockManager', () => {
 
     expect(request).toHaveBeenCalledOnce()
     expect(request).toHaveBeenCalledWith('screen')
-    expect(manager.getSnapshot()).toEqual({ status: 'active', warning: null })
+    expect(manager.getSnapshot()).toMatchObject({
+      status: 'active',
+      warning: null,
+      requested: true,
+      acquired: true,
+    })
   })
 
   it('ne demande aucun wake lock hors match', () => {
@@ -99,7 +104,7 @@ describe('ScreenWakeLockManager', () => {
     })
 
     await expect(manager.setMatchActive(true)).resolves.toBeUndefined()
-    expect(manager.getSnapshot()).toEqual({
+    expect(manager.getSnapshot()).toMatchObject({
       status: 'unavailable',
       warning: SCREEN_WAKE_LOCK_WARNING,
     })
@@ -114,7 +119,7 @@ describe('ScreenWakeLockManager', () => {
     })
 
     await expect(manager.setMatchActive(true)).resolves.toBeUndefined()
-    expect(manager.getSnapshot()).toEqual({
+    expect(manager.getSnapshot()).toMatchObject({
       status: 'error',
       warning: SCREEN_WAKE_LOCK_WARNING,
     })
@@ -177,5 +182,15 @@ describe('ScreenWakeLockManager', () => {
     manager.dismissWarning()
 
     expect(manager.getSnapshot().warning).toBeNull()
+  })
+
+  it('conserve le même verrou pendant une expérience toujours active', async () => {
+    const { manager, request, sentinels } = createHarness()
+    await manager.setExperienceActive(true)
+
+    await manager.setExperienceActive(true)
+
+    expect(request).toHaveBeenCalledOnce()
+    expect(sentinels[0].release).not.toHaveBeenCalled()
   })
 })

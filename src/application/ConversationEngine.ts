@@ -136,6 +136,17 @@ export class ConversationEngine {
     return this.emitMany([{ type: 'UpdateUIState', state: this.state }])
   }
 
+  handleFatalError(): ConversationIntent[] {
+    this.clearTimeout()
+    this.running = false
+    this.expectsResponse = false
+    this.state = 'ERROR'
+    return this.emitMany([
+      { type: 'StopRecognition' },
+      { type: 'UpdateUIState', state: this.state },
+    ])
+  }
+
   resumeListening(): ConversationIntent[] {
     if (!this.running) return []
     this.state = 'PLAYER_LISTENING'

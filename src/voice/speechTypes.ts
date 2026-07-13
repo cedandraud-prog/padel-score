@@ -6,6 +6,7 @@ export type VoiceErrorCode =
   | 'network'
   | 'no-speech'
   | 'aborted'
+  | 'invalid-state'
   | 'unknown'
 
 export interface SpeechTranscript {

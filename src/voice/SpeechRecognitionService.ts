@@ -161,9 +161,13 @@ export class SpeechRecognitionService implements RecognitionAdapter {
     try {
       this.starting = true
       recognition.start()
-    } catch {
+    } catch (error) {
       this.starting = false
       this.active = false
+      if (error instanceof DOMException && error.name === 'InvalidStateError') {
+        handlers.onError('invalid-state', 'La reconnaissance vocale redémarre.')
+        return
+      }
       handlers.onError(
         'unknown',
         'Impossible de démarrer la reconnaissance vocale.',

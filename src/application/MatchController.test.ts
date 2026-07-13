@@ -27,6 +27,7 @@ class MockRecognition implements RecognitionAdapter {
   stopCount = 0
   disposeCount = 0
   handlers: RecognitionHandlers | null = null
+  readonly sessionHandlers: RecognitionHandlers[] = []
 
   constructor(
     readonly isSupported = true,
@@ -36,6 +37,7 @@ class MockRecognition implements RecognitionAdapter {
   start(handlers: RecognitionHandlers): void {
     this.startCount += 1
     this.handlers = handlers
+    this.sessionHandlers.push(handlers)
     if (this.autoStart) handlers.onStart()
   }
 
@@ -718,12 +720,17 @@ describe('MatchController', () => {
   })
 
   it('relance l’écoute après un arrêt inattendu', () => {
+    vi.useFakeTimers()
     const recognition = new MockRecognition()
-    createController(recognition)
+    const { controller } = createController(recognition)
 
     recognition.endUnexpectedly()
+    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    vi.advanceTimersByTime(250)
 
     expect(recognition.startCount).toBe(2)
+    controller.destroy()
+    vi.useRealTimers()
   })
 
   it('ne termine pas automatiquement la session au vainqueur réglementaire', async () => {
@@ -1193,14 +1200,14 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     vi.useRealTimers()
   })
 
-  it('affiche l’échec après deux timeouts sans onstart', () => {
+  it('affiche l’échec après plusieurs timeouts sans onstart', () => {
     vi.useFakeTimers()
     const recognition = new MockRecognition(true, false)
     const controller = new MatchController(recognition, new MockSynthesis())
     controller.startMatch({
       configuration: matchConfiguration('Champions', 'Invincibles'),
     })
-    vi.advanceTimersByTime(3_200)
+    vi.advanceTimersByTime(6_100)
     expect(controller.getSnapshot().message).toBe(
       'Impossible de démarrer la reconnaissance vocale.',
     )
@@ -1238,6 +1245,242 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
       'Impossible de démarrer la reconnaissance vocale.',
     )
     expect(controller.getSnapshot().conversation.state).toBe('ERROR')
+  })
+})
+
+describe('MatchController écoute fonctionnellement continue', () => {
+  it('expose et change la stratégie d’écoute', () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+
+    controller.setListeningStrategy('LEGACY')
+
+    expect(controller.getSnapshot().listeningStrategy).toBe('LEGACY')
+    expect(recognition.startCount).toBe(2)
+  })
+
+  it('LEGACY relance immédiatement après onend', () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(
+      recognition,
+      new MockSynthesis(),
+      undefined,
+      undefined,
+      undefined,
+      'LEGACY',
+    )
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+
+    recognition.endUnexpectedly()
+
+    expect(recognition.startCount).toBe(2)
+  })
+
+  it('reste visuellement en écoute entre deux sessions techniques', () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+
+    recognition.endUnexpectedly()
+
+    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    expect(controller.getSnapshot().conversation.state).toBe('PLAYER_LISTENING')
+    expect(controller.getSnapshot().continuousListening.restartPending).toBe(
+      true,
+    )
+    vi.advanceTimersByTime(250)
+    expect(recognition.startCount).toBe(2)
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('ne rejoue pas le bip lors d’une relance purement technique', async () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition()
+    const readiness = new MockReadinessCue()
+    const controller = new MatchController(
+      recognition,
+      new MockSynthesis(),
+      undefined,
+      undefined,
+      readiness,
+    )
+    await controller.startVoiceSetup()
+    expect(readiness.playCount).toBe(1)
+
+    recognition.endUnexpectedly()
+    vi.advanceTimersByTime(250)
+    await Promise.resolve()
+
+    expect(recognition.startCount).toBe(2)
+    expect(readiness.playCount).toBe(1)
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('récupère discrètement après no-speech', () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    const session = recognition.handlers
+
+    session?.onError('no-speech', 'Aucune parole détectée.')
+    session?.onEnd()
+    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    vi.advanceTimersByTime(500)
+
+    expect(recognition.startCount).toBe(2)
+    expect(controller.getSnapshot().message).not.toContain('Aucune parole')
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('arrête les relances lorsque la permission microphone est refusée', () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    const session = recognition.handlers
+
+    session?.onError(
+      'not-allowed',
+      'Permission microphone refusée. Autorisez le microphone dans Chrome.',
+    )
+    session?.onEnd()
+    vi.runAllTimers()
+
+    expect(recognition.startCount).toBe(1)
+    expect(controller.getSnapshot().microphoneStatus).toBe('error')
+    expect(controller.getSnapshot().continuousListening.shouldListen).toBe(
+      false,
+    )
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('arrête les relances après trois erreurs réseau consécutives', () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+
+    let session = recognition.handlers
+    session?.onError('network', 'Erreur réseau.')
+    session?.onEnd()
+    vi.advanceTimersByTime(500)
+    session = recognition.handlers
+    session?.onError('network', 'Erreur réseau.')
+    session?.onEnd()
+    vi.advanceTimersByTime(1_000)
+    session = recognition.handlers
+    session?.onError('network', 'Erreur réseau persistante.')
+    session?.onEnd()
+    vi.runAllTimers()
+
+    expect(recognition.startCount).toBe(3)
+    expect(controller.getSnapshot().microphoneStatus).toBe('error')
+    expect(controller.getSnapshot().message).toBe('Erreur réseau persistante.')
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('conserve le contexte de configuration pendant une relance', async () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    await controller.startVoiceSetup()
+    await controller.handleTranscript({ transcript: 'Champions' })
+    const before = controller.getSnapshot()
+
+    recognition.endUnexpectedly()
+    vi.advanceTimersByTime(250)
+
+    const after = controller.getSnapshot()
+    expect(after.editingConfiguration.teamA.displayName).toBe('Champions')
+    expect(after.voiceSetup?.step).toBe(before.voiceSetup?.step)
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('conserve le score courant pendant une relance', async () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    await controller.awardPoint('A')
+    const before = controller.getSnapshot().display
+
+    recognition.endUnexpectedly()
+    vi.advanceTimersByTime(250)
+
+    expect(controller.getSnapshot().display).toEqual(before)
+    controller.destroy()
+    vi.useRealTimers()
+  })
+})
+
+describe('MatchController expérience active', () => {
+  it('active l’expérience dès la configuration', () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.beginConfigurationExperience()
+    expect(controller.getSnapshot().experience).toEqual({
+      stage: 'CONFIGURING',
+      active: true,
+    })
+  })
+
+  it('reste active entre configuration et match', () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.beginConfigurationExperience()
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    expect(controller.getSnapshot().experience).toEqual({
+      stage: 'PLAYING',
+      active: true,
+    })
+  })
+
+  it('termine l’expérience avec la session de jeu', async () => {
+    const { controller } = createController()
+    await controller.handleTranscript({ transcript: 'Fin de match' })
+    await controller.handleTranscript({ transcript: 'Confirmer' })
+    expect(controller.getSnapshot().experience).toEqual({
+      stage: 'FINISHED',
+      active: false,
+    })
+  })
+
+  it('désactive l’expérience au retour à l’accueil', () => {
+    const { controller } = createController()
+    controller.prepareNewMatch()
+    expect(controller.getSnapshot().experience).toEqual({
+      stage: 'IDLE',
+      active: false,
+    })
   })
 })
 

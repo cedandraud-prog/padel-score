@@ -89,4 +89,17 @@ describe('ConversationEngine', () => {
       transcript: 'Alpha',
     })
   })
+
+  it('arrête fonctionnellement l’écoute sur une erreur fatale', () => {
+    const engine = new ConversationEngine()
+    engine.start()
+
+    expect(engine.handleFatalError()).toContainEqual({
+      type: 'StopRecognition',
+    })
+    expect(engine.getSnapshot()).toMatchObject({
+      state: 'ERROR',
+      isRunning: false,
+    })
+  })
 })

@@ -15,6 +15,12 @@ import { ReadinessCueService } from './voice/ReadinessCueService'
 import type { FeedbackMode } from './voice/speechTypes'
 import { ScreenWakeLockManager } from './application/ScreenWakeLockManager'
 import { WakeLockWarning } from './ui/WakeLockWarning'
+import { browserListeningStrategyStore } from './voice/ListeningStrategy'
+
+const strategyStore = browserListeningStrategyStore()
+const diagnosticsEnabled = new URLSearchParams(window.location.search).has(
+  'diagnostics',
+)
 
 export default function App() {
   const [controller] = useState(() => {
@@ -25,6 +31,7 @@ export default function App() {
       new CommandFeedbackService(synthesis),
       undefined,
       new ReadinessCueService(),
+      strategyStore.load(),
     )
   })
   const [snapshot, setSnapshot] = useState<MatchControllerSnapshot>(() =>
@@ -50,10 +57,8 @@ export default function App() {
   )
 
   useEffect(() => {
-    void wakeLockManager.setMatchActive(
-      snapshot.session.state === 'IN_PROGRESS',
-    )
-  }, [snapshot.session.state, wakeLockManager])
+    void wakeLockManager.setExperienceActive(snapshot.experience.active)
+  }, [snapshot.experience.active, wakeLockManager])
 
   useEffect(
     () => () => {
@@ -85,19 +90,20 @@ export default function App() {
 
       {snapshot.phase === 'setup' || snapshot.phase === 'voice-setup' ? (
         <>
-          <MatchSetup
-            message={snapshot.message}
-            configuration={snapshot.editingConfiguration}
-            voiceSetup={snapshot.voiceSetup}
-            onConfigurationChange={(configuration) =>
-              controller.updateEditingConfiguration(configuration)
-            }
-            onStart={startMatch}
-            onVoiceSetup={(feedbackMode) =>
-              void controller.startNewMatchVoiceSetup(feedbackMode)
-            }
-          />
-          <VoiceDiagnostics snapshot={snapshot} />
+          <div onFocusCapture={() => controller.beginConfigurationExperience()}>
+            <MatchSetup
+              message={snapshot.message}
+              configuration={snapshot.editingConfiguration}
+              voiceSetup={snapshot.voiceSetup}
+              onConfigurationChange={(configuration) =>
+                controller.updateEditingConfiguration(configuration)
+              }
+              onStart={startMatch}
+              onVoiceSetup={(feedbackMode) =>
+                void controller.startNewMatchVoiceSetup(feedbackMode)
+              }
+            />
+          </div>
         </>
       ) : (
         <>
@@ -126,6 +132,17 @@ export default function App() {
             />
           )}
         </>
+      )}
+      {diagnosticsEnabled && (
+        <VoiceDiagnostics
+          snapshot={snapshot}
+          wakeLock={wakeLockSnapshot}
+          onStrategyChange={(strategy) => {
+            strategyStore.save(strategy)
+            controller.setListeningStrategy(strategy)
+          }}
+          onReset={() => controller.resetVoiceMetrics()}
+        />
       )}
     </main>
   )
