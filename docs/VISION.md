@@ -39,6 +39,14 @@ Le matériel est un moyen interchangeable. Le produit commercial reste l’expé
 
 Le MLP actuel permet de concevoir, tester et valider le cœur du produit avant son déploiement sur les différentes architectures.
 
+## Plateforme et produits verticaux
+
+PADEL SCORE est le premier vertical d’une plateforme de suivi de sports à score structuré. Il reste consacré au padel, avec sa marque, sa promesse et son expérience propres.
+
+À terme, un noyau commun pourra servir d’autres produits verticaux, chacun fondé sur une définition validée de son sport. Cette plateforme ne sera pas conçue par anticipation : le padel doit d’abord être consolidé, puis comparé à un deuxième cas complet, probablement le tennis.
+
+Une plateforme commune ne signifie pas une expérience uniforme. Chaque sport doit conserver les parcours et le vocabulaire qui lui sont naturels.
+
 ## Personas
 
 ### Joueur
@@ -109,6 +117,8 @@ Le même cœur logiciel pourra être déployé sous plusieurs formes :
 - TOURNAMENT.
 
 Cette vision est détaillée dans [ADR-007 — Stratégie de déploiement](adr/ADR-007-deployment-strategy.md) et actualisée par [ADR-008 — L’expérience prime sur le matériel](adr/ADR-008-experience-over-hardware.md).
+
+La trajectoire vers plusieurs sports est définie dans [ADR-010 — Architecture produit multisport](adr/ADR-010-multisport-product-architecture.md).
 
 ## Conclusion
 

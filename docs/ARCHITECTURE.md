@@ -13,6 +13,21 @@ Les périphériques sont des adaptateurs interchangeables autour du cœur logici
 
 Cette contrainte est formalisée dans [ADR-008 — L’expérience prime sur le matériel](adr/ADR-008-experience-over-hardware.md).
 
+## Architecture produit multisport cible
+
+L’architecture cible distingue quatre ensembles sans prétendre qu’ils sont déjà implémentés :
+
+- **noyau commun potentiel** : session, participants, événements, historique, correction, commandes, sorties et synchronisation dont les invariants auront été observés dans plusieurs sports ;
+- **définition de sport** : modèle de participants, règles de score, états, événements, victoire, correction, vocabulaire et configuration propres à un sport ;
+- **expérience verticale** : marque, promesse, interface, parcours et fonctions spécialisées d’un produit tel que PADEL SCORE ;
+- **adaptateurs matériels** : périphériques et capacités disponibles, indépendants des règles sportives.
+
+Dans le cœur cible, les notions `15`, `30`, `40`, jeu, set et tie-break ne sont pas universelles : elles appartiennent aux définitions des sports concernés.
+
+Cette séparation reste conceptuelle tant que le padel n’a pas été consolidé et comparé à une définition complète du tennis. Le `ScoreEngine` actuel n’est pas généralisé pour simuler des invariants encore non démontrés.
+
+Voir [ADR-010 — Architecture produit multisport](adr/ADR-010-multisport-product-architecture.md) et le [modèle conceptuel d’une définition de sport](SPORT_DEFINITION_MODEL.md).
+
 ## Conversation Engine
 
 `ConversationEngine` orchestre les tours système/joueur, les modes `MATCH` et `GUIDED`, la disponibilité de l’écoute, le timeout et le bip de disponibilité. Il reçoit des événements conversationnels et produit des intentions indépendantes des adaptateurs.

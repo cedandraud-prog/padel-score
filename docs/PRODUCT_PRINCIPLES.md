@@ -31,3 +31,19 @@ Aucune fonctionnalité ne doit être développée si elle n'apporte pas une vale
 ## 8. Product promise
 
 "You play. The system remembers."
+
+## 9. Abstract from real cases
+
+Une abstraction commune doit provenir de plusieurs cas réels définis, comparés et validés.
+
+## 10. No premature generalization
+
+Ne jamais ralentir un vertical validable pour construire une plateforme encore hypothétique.
+
+## 11. One platform, specialized experiences
+
+Un noyau commun peut servir plusieurs produits sans leur imposer la même marque, la même interface ou le même parcours.
+
+## 12. Rules belong to the sport
+
+Les règles appartiennent à la définition du sport, jamais aux périphériques utilisés pour interagir avec le système.

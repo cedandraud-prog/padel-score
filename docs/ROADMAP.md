@@ -26,3 +26,19 @@ TOURNAMENT
 Le matériel évolue. Le cœur logiciel reste identique.
 
 PADEL SCORE privilégie d’abord le matériel déjà possédé par le joueur. Un matériel propriétaire ne sera envisagé que comme option premium, après validation terrain.
+
+## Trajectoire multisport
+
+```text
+Consolider le vertical padel
+  ↓
+Définir complètement le modèle tennis
+  ↓
+Comparer padel et tennis
+  ↓
+Extraire les abstractions réellement communes
+  ↓
+Implémenter la sélection multisport si elle est alors pertinente
+```
+
+Cette trajectoire ne crée aucune Task d’implémentation multisport immédiate. Les tests terrain du padel restent prioritaires et le moteur actuel ne sera pas généralisé avant la comparaison des deux modèles.
