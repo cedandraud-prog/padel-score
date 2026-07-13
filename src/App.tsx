@@ -13,6 +13,8 @@ import { SpeechSynthesisService } from './voice/SpeechSynthesisService'
 import { CommandFeedbackService } from './voice/CommandFeedbackService'
 import { ReadinessCueService } from './voice/ReadinessCueService'
 import type { FeedbackMode } from './voice/speechTypes'
+import { ScreenWakeLockManager } from './application/ScreenWakeLockManager'
+import { WakeLockWarning } from './ui/WakeLockWarning'
 
 export default function App() {
   const [controller] = useState(() => {
@@ -28,6 +30,10 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<MatchControllerSnapshot>(() =>
     controller.getSnapshot(),
   )
+  const [wakeLockManager] = useState(() => new ScreenWakeLockManager())
+  const [wakeLockSnapshot, setWakeLockSnapshot] = useState(() =>
+    wakeLockManager.getSnapshot(),
+  )
 
   useEffect(() => {
     const unsubscribe = controller.subscribe(setSnapshot)
@@ -37,6 +43,24 @@ export default function App() {
       controller.destroy()
     }
   }, [controller])
+
+  useEffect(
+    () => wakeLockManager.subscribe(setWakeLockSnapshot),
+    [wakeLockManager],
+  )
+
+  useEffect(() => {
+    void wakeLockManager.setMatchActive(
+      snapshot.session.state === 'IN_PROGRESS',
+    )
+  }, [snapshot.session.state, wakeLockManager])
+
+  useEffect(
+    () => () => {
+      void wakeLockManager.destroy()
+    },
+    [wakeLockManager],
+  )
 
   const startMatch = (
     configuration: MatchConfiguration,
@@ -51,6 +75,13 @@ export default function App() {
         <h1>PADEL SCORE</h1>
         <p>Vous jouez. Le système se souvient.</p>
       </header>
+
+      {wakeLockSnapshot.warning && (
+        <WakeLockWarning
+          message={wakeLockSnapshot.warning}
+          onDismiss={() => wakeLockManager.dismissWarning()}
+        />
+      )}
 
       {snapshot.phase === 'setup' || snapshot.phase === 'voice-setup' ? (
         <>

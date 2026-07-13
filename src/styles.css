@@ -53,6 +53,28 @@ button:disabled {
   padding: 2rem 0 3rem;
 }
 
+.wake-lock-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #806f45;
+  border-radius: 0.75rem;
+  padding: 0.8rem 1rem;
+  color: #f7d995;
+  background: #2b2618;
+}
+
+.wake-lock-warning p {
+  margin: 0;
+}
+
+.wake-lock-warning button {
+  flex: none;
+  padding: 0.45rem 0.7rem;
+}
+
 header {
   display: flex;
   align-items: baseline;
