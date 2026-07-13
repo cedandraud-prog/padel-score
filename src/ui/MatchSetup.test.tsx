@@ -11,19 +11,33 @@ describe('MatchSetup', () => {
         message=""
         configuration={createDefaultMatchConfiguration()}
         voiceSetup={null}
-        onConfigurationChange={() => undefined}
+        microphoneStatus="listening"
         onVoiceSetup={() => undefined}
         onRestartConfiguration={() => undefined}
       />,
     )
 
-    expect(html).toContain('« Nouveau match »')
-    expect(html).toContain('Consigne vocale équipe A')
-    expect(html).toContain('Consigne vocale équipe B')
-    expect(html).not.toContain('Dites <strong>« Recommencer »</strong>')
+    expect(html).toContain(
+      '<section class="setup-primary-action" aria-label="Action principale">',
+    )
+    expect(html).toContain('<strong>« Nouveau match »</strong>')
+    expect(html).toContain('Écoute active')
+    expect(html.match(/Consigne vocale/g)).toHaveLength(2)
+    expect(html).toContain('En attente…')
+    expect(html).not.toContain('<input')
     expect(html).not.toContain('Démarrer le match')
     expect(html).not.toContain('Nom vocal')
     expect(html).not.toContain('class="restart-configuration"')
+
+    expect(html.indexOf('Configurer le match')).toBeLessThan(
+      html.indexOf('« Nouveau match »'),
+    )
+    expect(html.indexOf('« Nouveau match »')).toBeLessThan(
+      html.indexOf('Écoute active'),
+    )
+    expect(html.indexOf('Écoute active')).toBeLessThan(
+      html.indexOf('Informations reconnues'),
+    )
   })
 
   it('affiche le bouton tactile Recommencer à chaque étape vocale', () => {
@@ -58,16 +72,43 @@ describe('MatchSetup', () => {
           message=""
           configuration={voiceSetup.configuration}
           voiceSetup={voiceSetup}
-          onConfigurationChange={() => undefined}
+          microphoneStatus="listening"
           onVoiceSetup={() => undefined}
           onRestartConfiguration={() => undefined}
         />,
       )
       expect(html).toContain('class="restart-configuration"')
       expect(html).toContain('>Recommencer</button>')
-      expect(html).toContain(
-        'Efface la configuration en cours et reprend depuis le début.',
+      expect(html).not.toContain('Efface la configuration en cours')
+      expect(html.indexOf('Question en cours')).toBeLessThan(
+        html.indexOf('Informations reconnues'),
+      )
+      expect(html.indexOf('Informations reconnues')).toBeLessThan(
+        html.indexOf('>Recommencer</button>'),
       )
     }
+  })
+
+  it('restitue les valeurs vocales sans les transformer en champs éditables', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+    setup.handle('Champions du monde très motivés')
+    const voiceSetup = setup.handle('Rouge').snapshot
+
+    const html = renderToStaticMarkup(
+      <MatchSetup
+        message=""
+        configuration={voiceSetup.configuration}
+        voiceSetup={voiceSetup}
+        microphoneStatus="speaking"
+        onVoiceSetup={() => undefined}
+        onRestartConfiguration={() => undefined}
+      />,
+    )
+
+    expect(html).toContain('Champions du monde très motivés')
+    expect(html).toContain('<output>Rouge</output>')
+    expect(html).toContain('Annonce en cours')
+    expect(html).not.toContain('<input')
   })
 })

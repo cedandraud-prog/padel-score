@@ -1451,23 +1451,46 @@ describe('MatchController écoute fonctionnellement continue', () => {
     expect(recognition.startCount).toBe(2)
   })
 
-  it('LEGACY relance immédiatement après onend', () => {
+  it('LEGACY reproduit la relance historique immédiate sans son applicatif', () => {
     const recognition = new MockRecognition()
+    const readiness = new MockReadinessCue()
+    const feedback = new MockFeedback()
     const controller = new MatchController(
       recognition,
       new MockSynthesis(),
+      feedback,
       undefined,
-      undefined,
-      undefined,
+      readiness,
       'LEGACY',
     )
     controller.startMatch({
       configuration: matchConfiguration('Champions', 'Invincibles'),
     })
+    controller.resetVoiceMetrics()
 
     recognition.endUnexpectedly()
 
     expect(recognition.startCount).toBe(2)
+    expect(controller.getSnapshot().voiceTrace).toEqual([
+      expect.objectContaining({ type: 'ONEND', attemptId: 1 }),
+      expect.objectContaining({
+        type: 'RESTART_REQUESTED',
+        origin: 'LEGACY_ONEND',
+      }),
+      expect.objectContaining({
+        type: 'START_CALLED',
+        origin: 'LEGACY_ONEND',
+        attemptId: 2,
+      }),
+      expect.objectContaining({ type: 'ONSTART', attemptId: 2 }),
+    ])
+    expect(
+      controller
+        .getSnapshot()
+        .voiceTrace.some(({ type }) => type === 'APPLICATION_SOUND'),
+    ).toBe(false)
+    expect(readiness.playCount).toBe(0)
+    expect(feedback.plays).toEqual([])
   })
 
   it('reste visuellement en écoute entre deux sessions techniques', () => {
@@ -1505,6 +1528,7 @@ describe('MatchController écoute fonctionnellement continue', () => {
     )
     await controller.startVoiceSetup()
     expect(readiness.playCount).toBe(1)
+    controller.resetVoiceMetrics()
 
     recognition.endUnexpectedly()
     vi.advanceTimersByTime(250)
@@ -1513,6 +1537,48 @@ describe('MatchController écoute fonctionnellement continue', () => {
     expect(recognition.startCount).toBe(2)
     expect(readiness.playCount).toBe(1)
     expect(feedback.plays).toEqual([])
+    expect(controller.getSnapshot().voiceTrace).toEqual([
+      expect.objectContaining({ type: 'ONEND', attemptId: 1 }),
+      expect.objectContaining({
+        type: 'RESTART_REQUESTED',
+        origin: 'CONTINUOUS_ONEND',
+      }),
+      expect.objectContaining({
+        type: 'START_CALLED',
+        origin: 'CONTINUOUS_RESTART_TIMER',
+        attemptId: 2,
+      }),
+      expect.objectContaining({ type: 'ONSTART', attemptId: 2 }),
+    ])
+    controller.destroy()
+    vi.useRealTimers()
+  })
+
+  it('CONTINUOUS ignore un second onend et ne multiplie pas les start', () => {
+    vi.useFakeTimers()
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    controller.resetVoiceMetrics()
+    const endedSession = recognition.handlers
+
+    endedSession?.onEnd()
+    endedSession?.onEnd()
+    vi.advanceTimersByTime(250)
+
+    expect(recognition.startCount).toBe(2)
+    expect(
+      controller
+        .getSnapshot()
+        .voiceTrace.filter(({ type }) => type === 'RESTART_REQUESTED'),
+    ).toHaveLength(1)
+    expect(
+      controller
+        .getSnapshot()
+        .voiceTrace.filter(({ type }) => type === 'START_CALLED'),
+    ).toHaveLength(1)
     controller.destroy()
     vi.useRealTimers()
   })

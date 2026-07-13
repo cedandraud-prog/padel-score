@@ -67,6 +67,21 @@ describe('VoiceSettingsDiagnostic', () => {
         commandsLost: 1,
         lastError: 'network',
       },
+      voiceTrace: [
+        {
+          at: Date.parse('2026-07-13T12:00:01.000Z'),
+          type: 'START_CALLED',
+          origin: 'CONTINUOUS_RESTART_TIMER',
+          attemptId: 2,
+        },
+        {
+          at: Date.parse('2026-07-13T12:00:02.000Z'),
+          type: 'APPLICATION_SOUND',
+          origin: 'EXPECTED_RESPONSE_READY',
+          attemptId: 2,
+          soundType: 'READY_BEEP',
+        },
+      ],
       continuousListening: {
         shouldListen: true,
         recognitionRunning: true,
@@ -132,5 +147,8 @@ describe('VoiceSettingsDiagnostic', () => {
     }
     expect(html).toContain('Chrome / Android')
     expect(html).toContain('2026-07-13T12:00:00.000Z')
+    expect(html).toContain('Trace vocale horodatée')
+    expect(html).toContain('CONTINUOUS_RESTART_TIMER')
+    expect(html).toContain('READY_BEEP')
   })
 })

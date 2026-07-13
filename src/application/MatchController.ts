@@ -64,6 +64,21 @@ export interface VoiceRuntimeMetrics {
   lastError: string
 }
 
+export type VoiceTraceEventType =
+  | 'START_CALLED'
+  | 'ONSTART'
+  | 'ONEND'
+  | 'RESTART_REQUESTED'
+  | 'APPLICATION_SOUND'
+
+export interface VoiceTraceEvent {
+  at: number
+  type: VoiceTraceEventType
+  origin: string
+  attemptId: number | null
+  soundType?: 'READY_BEEP' | 'COMMAND_BEEP' | 'COMMAND_OK' | 'ANNOUNCEMENT'
+}
+
 export type MatchPhase =
   | 'setup'
   | 'voice-setup'
@@ -115,6 +130,7 @@ export interface MatchControllerSnapshot {
   experience: ExperienceSessionSnapshot
   listeningStrategy: ListeningStrategy
   voiceMetrics: VoiceRuntimeMetrics
+  voiceTrace: VoiceTraceEvent[]
 }
 
 export interface StartMatchOptions {
@@ -191,11 +207,12 @@ export class MatchController {
     commandsLost: 0,
     lastError: '',
   }
+  private voiceTrace: VoiceTraceEvent[] = []
   private readonly conversation = new ConversationEngine((intent) => {
     if (intent.type === 'Timeout') void this.expireCorrection()
   })
   private readonly continuousListening = new ContinuousListeningManager(() =>
-    this.startRecognition(true),
+    this.startRecognition(true, 'CONTINUOUS_RESTART_TIMER'),
   )
   private disposed = false
   private readonly listeners = new Set<Listener>()
@@ -249,6 +266,7 @@ export class MatchController {
       experience: this.experience.getSnapshot(),
       listeningStrategy: this.listeningStrategy,
       voiceMetrics: { ...this.voiceMetrics },
+      voiceTrace: this.voiceTrace.map((event) => ({ ...event })),
     }
   }
 
@@ -280,7 +298,7 @@ export class MatchController {
     this.recognition.stop()
     if (this.conversation.getSnapshot().isRunning && this.isListeningPhase()) {
       this.continuousListening.resumeTechnicalListening()
-      this.startRecognition()
+      this.startRecognition(false, 'STRATEGY_CHANGE')
     }
     this.emit()
   }
@@ -295,6 +313,7 @@ export class MatchController {
       commandsLost: 0,
       lastError: '',
     }
+    this.voiceTrace = []
     this.emit()
   }
 
@@ -342,7 +361,7 @@ export class MatchController {
     }
 
     if (this.recognition.isSupported) {
-      this.startRecognition()
+      this.startRecognition(false, 'MATCH_START')
     } else {
       this.microphoneStatus = 'unavailable'
       this.message =
@@ -393,7 +412,7 @@ export class MatchController {
     if (this.phase !== 'setup' || !this.recognition.isSupported) return
     this.conversation.start()
     this.continuousListening.startFunctionalListening()
-    this.startRecognition()
+    this.startRecognition(false, 'WAITING_SCREEN')
   }
 
   async startNewMatchVoiceSetup(
@@ -422,7 +441,7 @@ export class MatchController {
       this.activeRecognitionAttempt = null
       this.recognition.stop()
       this.continuousListening.resumeTechnicalListening()
-      this.startRecognition()
+      this.startRecognition(false, 'MANUAL_CONFIGURATION_CHANGE')
     }
     this.emit()
   }
@@ -765,7 +784,7 @@ export class MatchController {
     this.conversation.start()
     this.continuousListening.startFunctionalListening()
     this.message = ''
-    this.startRecognition()
+    this.startRecognition(false, 'MANUAL_ENABLE')
   }
 
   disableListening(): void {
@@ -1122,6 +1141,12 @@ export class MatchController {
     this.recognition.stop()
     this.emit()
     try {
+      this.traceVoice({
+        type: 'APPLICATION_SOUND',
+        origin: 'ACCEPTED_COMMAND_FEEDBACK',
+        attemptId: this.activeRecognitionAttempt,
+        soundType: this.feedbackMode === 'BEEP' ? 'COMMAND_BEEP' : 'COMMAND_OK',
+      })
       await this.feedback.play(this.feedbackMode)
     } catch (error) {
       this.message =
@@ -1198,6 +1223,11 @@ export class MatchController {
         ) {
           return
         }
+        this.traceVoice({
+          type: 'ONEND',
+          origin: 'SPEECH_RECOGNITION_EVENT',
+          attemptId,
+        })
         this.clearRecognitionStartTimeout()
         this.pendingRecognitionAttempt = null
         this.activeRecognitionAttempt = null
@@ -1210,10 +1240,18 @@ export class MatchController {
           this.isListeningPhase()
         ) {
           this.voiceMetrics.restarts += 1
+          this.traceVoice({
+            type: 'RESTART_REQUESTED',
+            origin:
+              this.listeningStrategy === 'LEGACY'
+                ? 'LEGACY_ONEND'
+                : 'CONTINUOUS_ONEND',
+            attemptId,
+          })
           if (this.listeningStrategy === 'LEGACY') {
             this.continuousListening.suspendTechnicalListening()
             this.continuousListening.resumeTechnicalListening()
-            this.startRecognition()
+            this.startRecognition(true, 'LEGACY_ONEND')
             return
           }
           this.microphoneStatus = 'listening'
@@ -1234,7 +1272,10 @@ export class MatchController {
     }
   }
 
-  private startRecognition(technicalRestart = false): boolean {
+  private startRecognition(
+    technicalRestart = false,
+    origin = technicalRestart ? 'TECHNICAL_RESTART' : 'FUNCTIONAL_START',
+  ): boolean {
     if (
       this.disposed ||
       !this.conversation.getSnapshot().isRunning ||
@@ -1255,6 +1296,11 @@ export class MatchController {
       : `Tentative ${attemptId} demandée`
     this.scheduleRecognitionStartTimeout(attemptId)
     this.voiceMetrics.sessionsCreated += 1
+    this.traceVoice({
+      type: 'START_CALLED',
+      origin,
+      attemptId,
+    })
     this.recognition.start(
       this.recognitionHandlers(this.editingRevision, attemptId),
     )
@@ -1270,6 +1316,11 @@ export class MatchController {
       this.emit()
       return
     }
+    this.traceVoice({
+      type: 'ONSTART',
+      origin: 'SPEECH_RECOGNITION_EVENT',
+      attemptId,
+    })
     const technicalRestart = this.pendingRecognitionIsTechnicalRestart
     this.clearRecognitionStartTimeout()
     this.pendingRecognitionAttempt = null
@@ -1298,6 +1349,12 @@ export class MatchController {
     if (!expectsResponse) return
     this.readinessPlaying = true
     try {
+      this.traceVoice({
+        type: 'APPLICATION_SOUND',
+        origin: 'EXPECTED_RESPONSE_READY',
+        attemptId,
+        soundType: 'READY_BEEP',
+      })
       await this.readinessCue.play()
       this.recognitionLifecycle = `Bip émis pour la tentative ${attemptId}`
     } catch (error) {
@@ -1371,7 +1428,15 @@ export class MatchController {
       if (text && !this.synthesis.isSupported) {
         throw new Error('Synthèse vocale indisponible dans ce navigateur.')
       }
-      if (text) await this.synthesis.speak(text)
+      if (text) {
+        this.traceVoice({
+          type: 'APPLICATION_SOUND',
+          origin: `ANNOUNCEMENT_${this.phase.toUpperCase()}`,
+          attemptId: null,
+          soundType: 'ANNOUNCEMENT',
+        })
+        await this.synthesis.speak(text)
+      }
     } catch (error) {
       if (announcementId === this.announcementSequence) {
         this.message =
@@ -1388,7 +1453,7 @@ export class MatchController {
     ) {
       this.continuousListening.resumeTechnicalListening()
       if (intents.some((intent) => intent.type === 'StartRecognition')) {
-        this.startRecognition()
+        this.startRecognition(false, 'ANNOUNCEMENT_FINISHED')
       }
       this.emit()
     } else {
@@ -1404,6 +1469,12 @@ export class MatchController {
   private emit(): void {
     const snapshot = this.getSnapshot()
     this.listeners.forEach((listener) => listener(snapshot))
+  }
+
+  private traceVoice(event: Omit<VoiceTraceEvent, 'at'>): void {
+    this.voiceTrace = [...this.voiceTrace, { ...event, at: this.now() }].slice(
+      -100,
+    )
   }
 }
 

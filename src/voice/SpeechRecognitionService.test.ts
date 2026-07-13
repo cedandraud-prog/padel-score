@@ -47,6 +47,24 @@ describe('SpeechRecognitionService', () => {
     expect(recognition.start).toHaveBeenCalledOnce()
   })
 
+  it('conserve une seule session technique active après onstart', () => {
+    const recognition = new BrowserRecognitionMock()
+    vi.stubGlobal('window', {
+      webkitSpeechRecognition: class {
+        constructor() {
+          return recognition
+        }
+      },
+    })
+    const service = new SpeechRecognitionService()
+
+    service.start(handlers())
+    recognition.onstart?.()
+    service.start(handlers())
+
+    expect(recognition.start).toHaveBeenCalledOnce()
+  })
+
   it('classe InvalidStateError comme une erreur récupérable', () => {
     const recognition = new BrowserRecognitionMock()
     recognition.start.mockImplementation(() => {

@@ -10,9 +10,15 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
   margin: 0;
-  min-width: 900px;
+  min-width: 0;
 }
 
 button,
@@ -49,6 +55,7 @@ button:disabled {
 .app-shell {
   width: min(1100px, calc(100% - 4rem));
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   padding: 2rem 0 3rem;
 }
@@ -75,7 +82,7 @@ button:disabled {
   padding: 0.45rem 0.7rem;
 }
 
-header {
+.app-shell > header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -115,6 +122,186 @@ form,
 .setup-form {
   display: grid;
   gap: 1rem;
+}
+
+.setup-panel {
+  display: grid;
+  width: 100%;
+  max-width: 720px;
+  gap: 1.25rem;
+  overflow: hidden;
+}
+
+.setup-title-block {
+  min-width: 0;
+}
+
+.setup-eyebrow {
+  margin-bottom: 0.35rem;
+  color: #a8f0c6;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.setup-title-block h2 {
+  margin: 0;
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+}
+
+.setup-primary-action {
+  display: grid;
+  justify-items: center;
+  border: 1px solid #66a987;
+  border-radius: 1rem;
+  padding: clamp(1.25rem, 5vw, 2.25rem) 1rem;
+  background: linear-gradient(145deg, #173c2d, #102a22);
+  text-align: center;
+}
+
+.setup-primary-action span {
+  color: #d5e4df;
+  font-size: clamp(1rem, 3vw, 1.25rem);
+  font-weight: 650;
+}
+
+.setup-primary-action strong {
+  margin: 0.2em 0;
+  color: #ffffff;
+  font-size: clamp(2.25rem, 7vw, 4.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.setup-listening-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  margin: 0;
+  color: #c4d4cf;
+  font-weight: 750;
+}
+
+.setup-listening-state > span {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #82928d;
+}
+
+.setup-listening-state--listening > span {
+  background: #5ee98f;
+  box-shadow: 0 0 0 0.3rem rgb(94 233 143 / 12%);
+}
+
+.setup-listening-state--starting > span,
+.setup-listening-state--speaking > span {
+  background: #ffce6a;
+}
+
+.setup-current-question {
+  border-left: 3px solid #a8f0c6;
+  padding: 0.25rem 0 0.25rem 1rem;
+}
+
+.setup-current-question > p:first-child {
+  margin-bottom: 0.35rem;
+  color: #afc0ba;
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.setup-current-question h3 {
+  margin: 0;
+  font-size: clamp(1.2rem, 4vw, 1.65rem);
+  overflow-wrap: anywhere;
+}
+
+.setup-message {
+  margin: 0;
+}
+
+.setup-summary h3 {
+  margin: 0 0 0.75rem;
+  color: #d5e4df;
+  font-size: 1rem;
+}
+
+.setup-team-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.setup-team-card,
+.setup-server-summary {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #345149;
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  background: #0b1814;
+}
+
+.setup-team-card h4 {
+  margin: 0 0 0.75rem;
+  color: #f4f7f5;
+  font-size: 1rem;
+}
+
+.setup-team-card dl,
+.setup-server-summary {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.setup-team-card dl,
+.setup-team-card dd,
+.setup-server-summary dd {
+  margin: 0;
+}
+
+.setup-team-card dt,
+.setup-server-summary dt {
+  margin-bottom: 0.2rem;
+  color: #82928d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.setup-team-card output,
+.setup-server-summary output {
+  display: block;
+  min-width: 0;
+  color: #f4f7f5;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.setup-server-summary {
+  margin-top: 0.75rem;
+}
+
+.setup-alternatives {
+  border-top: 1px solid #345149;
+  padding-top: 0.9rem;
+  color: #afc0ba;
+}
+
+.setup-alternatives summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.setup-alternatives[open] {
+  display: grid;
+  gap: 0.85rem;
 }
 
 label {
@@ -267,20 +454,9 @@ fieldset {
   gap: 0.65rem;
 }
 
-.setup-help {
-  margin-bottom: 1.25rem;
-  color: #c4d4cf;
-  line-height: 1.45;
-}
-
-.voice-setup-status {
-  display: grid;
-  gap: 0.6rem;
-  margin-top: 1.25rem;
-}
-
 .restart-configuration {
-  min-height: 3rem;
+  width: 100%;
+  min-height: 3.25rem;
   border-color: #9b625d;
   color: #ffd0cc;
   background: transparent;
@@ -289,11 +465,6 @@ fieldset {
 
 .restart-configuration:hover:not(:disabled) {
   background: #35211f;
-}
-
-.voice-setup-status small {
-  color: #afc0ba;
-  line-height: 1.4;
 }
 
 .voice-command-help {
@@ -370,6 +541,93 @@ fieldset {
   margin-top: 0;
 }
 
+.voice-trace {
+  margin-top: 1rem;
+  border: 1px solid #345149;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: #0b1814;
+}
+
+.voice-trace h3 {
+  margin-top: 0;
+}
+
+.voice-trace ol {
+  max-height: 18rem;
+  margin-bottom: 0;
+  overflow: auto;
+  padding-left: 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
 .correction-panel {
   margin-top: 1rem;
+}
+
+@media (max-width: 700px) {
+  .app-shell {
+    width: calc(100% - 1.5rem);
+    padding: 1rem 0 1.5rem;
+  }
+
+  .app-shell--setup {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0;
+    overflow-x: clip;
+  }
+
+  .app-shell--setup > header {
+    display: none;
+  }
+
+  .app-shell--setup .wake-lock-warning {
+    margin: max(0.75rem, env(safe-area-inset-top))
+      max(0.75rem, env(safe-area-inset-right)) 0
+      max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .setup-panel {
+    width: 100%;
+    max-width: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    padding: max(1rem, env(safe-area-inset-top))
+      max(1rem, env(safe-area-inset-right))
+      max(1.25rem, env(safe-area-inset-bottom))
+      max(1rem, env(safe-area-inset-left));
+  }
+
+  .setup-primary-action strong {
+    font-size: clamp(2.1rem, 10vw, 3.5rem);
+  }
+
+  .setup-team-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wake-lock-warning {
+    align-items: flex-start;
+  }
+}
+
+@media (max-height: 600px) and (max-width: 700px) {
+  .setup-panel {
+    gap: 0.85rem;
+  }
+
+  .setup-primary-action {
+    padding-block: 1rem;
+  }
+
+  .setup-team-card dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

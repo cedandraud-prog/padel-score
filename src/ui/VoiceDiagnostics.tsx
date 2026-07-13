@@ -384,6 +384,27 @@ export function VoiceDiagnostics({
           <dd>{recognition?.resultIndex ?? '—'}</dd>
         </div>
       </dl>
+      <section className="voice-trace" aria-label="Trace vocale horodatée">
+        <h3>Trace vocale horodatée</h3>
+        {snapshot.voiceTrace.length === 0 ? (
+          <p>Aucun événement.</p>
+        ) : (
+          <ol>
+            {snapshot.voiceTrace.map((event, index) => (
+              <li key={`${event.at}-${event.type}-${index}`}>
+                <time dateTime={new Date(event.at).toISOString()}>
+                  {new Date(event.at).toISOString()}
+                </time>{' '}
+                — <strong>{event.type}</strong> — {event.origin}
+                {event.attemptId === null
+                  ? ''
+                  : ` — tentative ${event.attemptId}`}
+                {event.soundType ? ` — ${event.soundType}` : ''}
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
     </details>
   )
 }

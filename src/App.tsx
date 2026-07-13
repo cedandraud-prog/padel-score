@@ -67,8 +67,11 @@ export default function App() {
     [wakeLockManager],
   )
 
+  const isMatchSetup =
+    snapshot.phase === 'setup' || snapshot.phase === 'voice-setup'
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell${isMatchSetup ? ' app-shell--setup' : ''}`}>
       <header>
         <h1>PADEL SCORE</h1>
         <p>Vous jouez. Le système se souvient.</p>
@@ -81,25 +84,17 @@ export default function App() {
         />
       )}
 
-      {snapshot.phase === 'setup' || snapshot.phase === 'voice-setup' ? (
-        <>
-          <div onFocusCapture={() => controller.beginConfigurationExperience()}>
-            <MatchSetup
-              message={snapshot.message}
-              configuration={snapshot.editingConfiguration}
-              voiceSetup={snapshot.voiceSetup}
-              onConfigurationChange={(configuration) =>
-                controller.updateEditingConfiguration(configuration)
-              }
-              onVoiceSetup={(feedbackMode) =>
-                void controller.startNewMatchVoiceSetup(feedbackMode)
-              }
-              onRestartConfiguration={() =>
-                void controller.restartConfiguration()
-              }
-            />
-          </div>
-        </>
+      {isMatchSetup ? (
+        <MatchSetup
+          message={snapshot.message}
+          configuration={snapshot.editingConfiguration}
+          voiceSetup={snapshot.voiceSetup}
+          microphoneStatus={snapshot.microphoneStatus}
+          onVoiceSetup={(feedbackMode) =>
+            void controller.startNewMatchVoiceSetup(feedbackMode)
+          }
+          onRestartConfiguration={() => void controller.restartConfiguration()}
+        />
       ) : (
         <>
           <MatchScreen
