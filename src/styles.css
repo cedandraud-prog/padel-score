@@ -132,6 +132,10 @@ form,
   overflow: hidden;
 }
 
+.setup-panel--plus {
+  max-width: 1100px;
+}
+
 .setup-title-block {
   min-width: 0;
 }
@@ -148,6 +152,60 @@ form,
 .setup-title-block h2 {
   margin: 0;
   font-size: clamp(1.65rem, 4vw, 2.35rem);
+}
+
+.setup-title-block > p:last-child {
+  margin: 0.5rem 0 0;
+  color: #afc0ba;
+}
+
+.setup-mode-selector,
+.setup-team-form {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid #345149;
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.setup-mode-selector {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.setup-mode-selector legend,
+.setup-team-form legend {
+  padding-inline: 0.35rem;
+  color: #f4f7f5;
+  font-weight: 800;
+}
+
+.setup-mode-selector label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  border: 1px solid #678079;
+  border-radius: 0.65rem;
+  padding: 0.8rem;
+  background: #0b1814;
+}
+
+.setup-mode-selector input {
+  width: auto;
+  margin: 0;
+}
+
+.setup-mode-selector span,
+.setup-mode-selector small {
+  display: block;
+  min-width: 0;
+}
+
+.setup-mode-selector small,
+.setup-team-form small {
+  color: #82928d;
+  font-weight: 500;
 }
 
 .setup-primary-action {
@@ -203,8 +261,13 @@ form,
 }
 
 .setup-current-question {
-  border-left: 3px solid #a8f0c6;
-  padding: 0.25rem 0 0.25rem 1rem;
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid #66a987;
+  border-left: 4px solid #a8f0c6;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #102a22;
 }
 
 .setup-current-question > p:first-child {
@@ -218,8 +281,221 @@ form,
 
 .setup-current-question h3 {
   margin: 0;
-  font-size: clamp(1.2rem, 4vw, 1.65rem);
+  color: #ffffff;
+  font-size: clamp(1.45rem, 5vw, 2rem);
+  line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+.setup-answer-voice {
+  justify-self: start;
+  min-height: 2.75rem;
+}
+
+.setup-fields,
+.setup-team-form,
+.setup-player-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.85rem;
+}
+
+.setup-fields input,
+.setup-fields select,
+.setup-fields button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.setup-player-field {
+  border-left: 2px solid #345149;
+  padding-left: 0.75rem;
+}
+
+.setup-side {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  color: #a8f0c6;
+  background: #173c2d;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.setup-dictation,
+.setup-swap-sides {
+  width: 100%;
+  min-height: 2.75rem;
+  background: transparent;
+}
+
+.setup-coming-soon {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  border: 1px solid #66a987;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  color: #d5e4df;
+  background: #102a22;
+  text-align: center;
+}
+
+.setup-coming-soon strong {
+  color: #a8f0c6;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+}
+
+.setup-plus {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.setup-plus input,
+.setup-plus select,
+.setup-plus button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.setup-plus-progress {
+  margin: 0;
+  border-left: 3px solid #66a987;
+  padding: 0.45rem 0.75rem;
+  color: #afc0ba;
+}
+
+.setup-plus-progress strong {
+  color: #f4f7f5;
+}
+
+.setup-plus-teams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  min-width: 0;
+}
+
+.setup-team-form--plus {
+  align-content: start;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.setup-field-with-action,
+.setup-server-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.55rem;
+  min-width: 0;
+  border-radius: 0.55rem;
+}
+
+.setup-field-with-action > label,
+.setup-server-block > label,
+.setup-player-field > label {
+  min-width: 0;
+}
+
+.setup-field-with-action input,
+.setup-server-block select,
+.setup-player-field input {
+  width: 100%;
+}
+
+.setup-player-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.setup-team-form--plus .setup-player-field {
+  gap: 0.45rem;
+  border: 1px solid #345149;
+  border-radius: 0.65rem;
+  padding: 0.65rem;
+}
+
+.setup-player-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.setup-team-form--plus .setup-dictation,
+.setup-server-block .setup-dictation {
+  width: auto;
+  min-height: 2.75rem;
+  padding-inline: 0.75rem;
+  background: transparent;
+}
+
+.setup-team-form--plus .setup-swap-sides {
+  justify-self: start;
+  width: auto;
+  min-height: 2.75rem;
+  padding-inline: 0.85rem;
+}
+
+.setup-voice-field {
+  align-items: start;
+}
+
+.setup-field--next {
+  outline: 2px solid rgb(102 169 135 / 70%);
+  outline-offset: 0.2rem;
+}
+
+.setup-server-block {
+  border: 1px solid #345149;
+  padding: 0.85rem;
+  background: #0b1814;
+}
+
+.setup-dictation-diagnostics {
+  min-width: 0;
+  border: 1px solid #345149;
+  border-radius: 0.65rem;
+  padding: 0.75rem;
+  background: #0b1814;
+}
+
+.setup-dictation-diagnostics summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.setup-dictation-diagnostics dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.setup-dictation-diagnostics dt {
+  color: #82928d;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.setup-dictation-diagnostics dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.setup-dictation-diagnostics pre {
+  max-height: 12rem;
+  overflow: auto;
+  font-size: 0.72rem;
+}
+
+.setup-start-match {
+  width: 100%;
+  min-height: 3.5rem;
+  font-weight: 800;
 }
 
 .setup-message {
@@ -282,6 +558,123 @@ form,
   color: #f4f7f5;
   font-weight: 750;
   overflow-wrap: anywhere;
+}
+
+.setup-summary-value {
+  min-width: 0;
+}
+
+.setup-summary-value dd small {
+  display: block;
+  margin-top: 0.25rem;
+  color: #82928d;
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.setup-edit-value {
+  display: flex;
+  width: 100%;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 0;
+  padding: 0.35rem 0;
+  color: #f4f7f5;
+  background: transparent;
+  font-weight: 750;
+  text-align: left;
+}
+
+.setup-edit-value:hover:not(:disabled) {
+  color: #a8f0c6;
+  background: transparent;
+}
+
+.setup-edit-value > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.setup-edit-value > span:nth-child(2) {
+  flex: none;
+  color: #82928d;
+}
+
+.setup-server-summary--plus {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+.setup-voice-explanation {
+  border-top: 1px solid #345149;
+  padding-top: 0.75rem;
+  color: #afc0ba;
+}
+
+.setup-voice-explanation summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.setup-voice-explanation p {
+  margin-bottom: 0;
+}
+
+.setup-mode-selector--secondary {
+  padding: 0.75rem;
+}
+
+.setup-edit-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(2 10 8 / 78%);
+}
+
+.setup-edit-dialog {
+  width: min(100%, 420px);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  border: 1px solid #66a987;
+  border-radius: 1rem;
+  padding: 1rem;
+  background: #10211b;
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 45%);
+}
+
+.setup-edit-dialog form {
+  display: grid;
+  gap: 1rem;
+}
+
+.setup-edit-dialog h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.setup-edit-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.setup-edit-actions button {
+  min-height: 2.75rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
 }
 
 .setup-voice-help {
@@ -697,6 +1090,19 @@ fieldset {
 
   .setup-primary-action strong {
     font-size: clamp(2.1rem, 10vw, 3.5rem);
+  }
+
+  .setup-mode-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-plus-teams,
+  .setup-player-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .setup-dictation-diagnostics dl {
+    grid-template-columns: 1fr;
   }
 
   .setup-team-grid {

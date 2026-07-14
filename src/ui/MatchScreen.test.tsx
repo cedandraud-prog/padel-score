@@ -128,4 +128,24 @@ describe('MatchScreen', () => {
 
     expect(html).toContain('Réactiver l’écoute')
   })
+
+  it('annonce la préparation tant que la capture audio n’est pas prête', () => {
+    const html = renderToStaticMarkup(
+      <MatchScreen
+        snapshot={{ ...snapshot, microphoneStatus: 'starting' }}
+        onPoint={() => undefined}
+        onUndo={() => undefined}
+        onScore={() => undefined}
+        onFullScore={() => undefined}
+        onCorrect={() => undefined}
+        onToggleListening={() => undefined}
+        onNewMatch={() => undefined}
+        onDisplayNameChange={() => undefined}
+        onServingTeamChange={() => undefined}
+      />,
+    )
+
+    expect(html).toContain('Préparation du microphone')
+    expect(html).not.toContain('Microphone en écoute')
+  })
 })

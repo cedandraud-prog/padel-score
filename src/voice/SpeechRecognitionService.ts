@@ -38,6 +38,9 @@ interface BrowserSpeechRecognition {
   maxAlternatives: number
   onresult: ((event: BrowserSpeechResultEvent) => void) | null
   onstart: (() => void) | null
+  onaudiostart?: (() => void) | null
+  onspeechstart?: (() => void) | null
+  onspeechend?: (() => void) | null
   onerror: ((event: BrowserSpeechErrorEvent) => void) | null
   onend: (() => void) | null
   start(): void
@@ -115,6 +118,7 @@ export class SpeechRecognitionService implements RecognitionAdapter {
     }
 
     const recognition = new Recognition()
+    const exposesAudioStartEvent = 'onaudiostart' in recognition
     this.recognition = recognition
     recognition.lang = 'fr-FR'
     recognition.continuous = true
@@ -122,6 +126,7 @@ export class SpeechRecognitionService implements RecognitionAdapter {
     recognition.maxAlternatives = 1
 
     recognition.onresult = (event) => {
+      if (this.recognition !== recognition || !this.active) return
       const result = event.results[event.resultIndex]
       const alternative = result?.[0]
       if (!result || !alternative) return
@@ -145,6 +150,19 @@ export class SpeechRecognitionService implements RecognitionAdapter {
         this.active = true
       }
       handlers.onStart()
+      if (!exposesAudioStartEvent) handlers.onAudioStart?.('onstart-fallback')
+    }
+    recognition.onaudiostart = () => {
+      if (this.recognition !== recognition || !this.active) return
+      handlers.onAudioStart?.('audiostart')
+    }
+    recognition.onspeechstart = () => {
+      if (this.recognition !== recognition || !this.active) return
+      handlers.onSpeechStart?.()
+    }
+    recognition.onspeechend = () => {
+      if (this.recognition !== recognition || !this.active) return
+      handlers.onSpeechEnd?.()
     }
     recognition.onerror = (event) => {
       const error = mapError(event.error)
@@ -187,6 +205,9 @@ export class SpeechRecognitionService implements RecognitionAdapter {
     if (this.recognition) {
       this.recognition.onresult = null
       this.recognition.onstart = null
+      this.recognition.onaudiostart = null
+      this.recognition.onspeechstart = null
+      this.recognition.onspeechend = null
       this.recognition.onerror = null
       this.recognition.onend = null
     }

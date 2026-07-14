@@ -18,7 +18,7 @@ function advanceToServer(setup: VoiceMatchSetup): void {
 }
 
 describe('VoiceMatchSetup', () => {
-  it('capture le nom affiché A puis explique le rôle de la consigne vocale', () => {
+  it('pose la question courte de consigne vocale après le nom affiché A', () => {
     const setup = new VoiceMatchSetup()
     setup.start()
 
@@ -26,9 +26,9 @@ describe('VoiceMatchSetup', () => {
 
     expect(result.snapshot.configuration.teamA.displayName).toBe('Champions')
     expect(result.snapshot.step).toBe('team-a-voice-name')
-    expect(result.announcement).toContain('Quelle consigne vocale')
-    expect(result.announcement).toContain('prononcerez ce mot')
-    expect(result.announcement).toContain('attribuer un point')
+    expect(result.announcement).toBe(
+      'Quelle consigne vocale pour cette équipe ?',
+    )
   })
 
   it('passe directement de la consigne A au nom de l’équipe B', () => {
@@ -40,8 +40,7 @@ describe('VoiceMatchSetup', () => {
 
     expect(result.snapshot.configuration.teamA.voiceName).toBe('Rouge')
     expect(result.snapshot.step).toBe('team-b-display-name')
-    expect(result.announcement).toContain('dites « Rouge »')
-    expect(result.announcement).toContain('donner un point à Champions')
+    expect(result.announcement).toContain('« Rouge » enregistré.')
     expect(result.announcement).toContain('Nom de la deuxième équipe ?')
     expect(result.announcement).not.toContain('Test de reconnaissance')
   })
@@ -60,8 +59,7 @@ describe('VoiceMatchSetup', () => {
     })
     expect(result.snapshot.step).toBe('server')
     expect(result.snapshot.prompt).toBe('Qui sert ?')
-    expect(result.announcement).toContain('dites « Bleu »')
-    expect(result.announcement).toContain('donner un point à Les Bleus')
+    expect(result.announcement).toContain('« Bleu » enregistré.')
     expect(result.announcement).toContain('Qui sert ?')
   })
 
@@ -140,6 +138,34 @@ describe('VoiceMatchSetup', () => {
 
     expect(result.snapshot.configuration.servingTeam).toBe('B')
     expect(result.snapshot.step).toBe('confirmation')
+  })
+
+  it('accepte gagner pour la consigne contrôlée gagné', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+    setup.handle('Champions')
+    setup.handle('gagné')
+    setup.handle('Invincibles')
+    setup.handle('Bleu')
+
+    const result = setup.handle('gagner')
+
+    expect(result.snapshot.configuration.servingTeam).toBe('A')
+    expect(result.snapshot.step).toBe('confirmation')
+  })
+
+  it('ne rapproche pas gagner du nom affiché libre Gagné', () => {
+    const setup = new VoiceMatchSetup()
+    setup.start()
+    setup.handle('Gagné')
+    setup.handle('Rouge')
+    setup.handle('Invincibles')
+    setup.handle('Bleu')
+
+    const result = setup.handle('gagner')
+
+    expect(result.snapshot.step).toBe('server')
+    expect(result.snapshot.message).toContain('Dites exactement')
   })
 
   it('demande une clarification si le serveur est ambigu', () => {

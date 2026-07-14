@@ -1,5 +1,6 @@
 import type { TeamId } from '../core/matchTypes'
 import { normalizeSpeech } from '../voice/normalizeSpeech'
+import { matchesControlledResponse } from '../voice/controlledResponseAliases'
 import {
   copyMatchConfiguration,
   createDefaultMatchConfiguration,
@@ -19,6 +20,13 @@ export type VoiceSetupStep =
   | 'confirmation'
   | 'completed'
   | 'cancelled'
+
+export type VoiceSetupEditedField =
+  | 'teamA.displayName'
+  | 'teamA.voiceName'
+  | 'teamB.displayName'
+  | 'teamB.voiceName'
+  | 'servingTeam'
 
 export interface VoiceMatchSetupSnapshot {
   step: VoiceSetupStep
@@ -42,12 +50,12 @@ function teamKey(team: TeamId): 'teamA' | 'teamB' {
   return team === 'A' ? 'teamA' : 'teamB'
 }
 
-function voiceNameQuestion(displayName: string): string {
-  return `Quelle consigne vocale souhaitez-vous utiliser pour ${displayName} ? Pendant le match, vous prononcerez ce mot pour lui attribuer un point.`
+function voiceNameQuestion(): string {
+  return 'Quelle consigne vocale pour cette équipe ?'
 }
 
-function voiceNameConfirmation(displayName: string, voiceName: string): string {
-  return `Très bien. Pendant le match, dites « ${voiceName} » pour donner un point à ${displayName}.`
+function voiceNameConfirmation(voiceName: string): string {
+  return `« ${voiceName} » enregistré.`
 }
 
 export class VoiceMatchSetup {
@@ -68,8 +76,12 @@ export class VoiceMatchSetup {
     )
   }
 
-  synchronizeConfiguration(configuration: MatchConfiguration): void {
+  synchronizeConfiguration(
+    configuration: MatchConfiguration,
+    editedField?: VoiceSetupEditedField,
+  ): void {
     this.configuration = copyMatchConfiguration(configuration)
+    if (editedField) this.advanceAfterManualEdit(editedField)
   }
 
   getSnapshot(): VoiceMatchSetupSnapshot {
@@ -138,7 +150,7 @@ export class VoiceMatchSetup {
     this.configuration[teamKey(team)].displayName = value
     this.message = ''
     this.step = team === 'A' ? 'team-a-voice-name' : 'team-b-voice-name'
-    const question = voiceNameQuestion(value)
+    const question = voiceNameQuestion()
     return this.result(question, question)
   }
 
@@ -148,17 +160,16 @@ export class VoiceMatchSetup {
     if (error) return this.reject(error)
     const other = team === 'A' ? 'B' : 'A'
     if (
-      normalizeSpeech(value) ===
-      normalizeSpeech(this.configuration[teamKey(other)].voiceName)
+      matchesControlledResponse(
+        value,
+        this.configuration[teamKey(other)].voiceName,
+      )
     ) {
       return this.reject('Les consignes vocales doivent être différentes.')
     }
     this.configuration[teamKey(team)].voiceName = value
     this.message = ''
-    const confirmation = voiceNameConfirmation(
-      this.configuration[teamKey(team)].displayName,
-      value,
-    )
+    const confirmation = voiceNameConfirmation(value)
     if (team === 'A') {
       this.step = 'team-b-display-name'
       return this.result(
@@ -173,12 +184,14 @@ export class VoiceMatchSetup {
   private captureServer(normalized: string): VoiceSetupResult {
     const matches = (['A', 'B'] as const).filter((team) => {
       const configuredTeam = this.configuration[teamKey(team)]
-      const acceptedNames = this.serverRequiresVoiceName
-        ? [configuredTeam.voiceName]
-        : [configuredTeam.displayName, configuredTeam.voiceName]
-      return acceptedNames.some(
-        (acceptedName) => normalized === normalizeSpeech(acceptedName),
+      const voiceNameMatches = matchesControlledResponse(
+        normalized,
+        configuredTeam.voiceName,
       )
+      return this.serverRequiresVoiceName
+        ? voiceNameMatches
+        : normalized === normalizeSpeech(configuredTeam.displayName) ||
+            voiceNameMatches
     })
 
     if (matches.length > 1) {
@@ -207,6 +220,43 @@ export class VoiceMatchSetup {
   private reject(reason: string): VoiceSetupResult {
     this.message = reason
     return this.result(`${reason} ${this.prompt}`, this.prompt)
+  }
+
+  private advanceAfterManualEdit(editedField: VoiceSetupEditedField): void {
+    const expectedFieldByStep: Partial<
+      Record<VoiceSetupStep, VoiceSetupEditedField>
+    > = {
+      'team-a-display-name': 'teamA.displayName',
+      'team-a-voice-name': 'teamA.voiceName',
+      'team-b-display-name': 'teamB.displayName',
+      'team-b-voice-name': 'teamB.voiceName',
+      server: 'servingTeam',
+    }
+    if (expectedFieldByStep[this.step] !== editedField) return
+
+    switch (this.step) {
+      case 'team-a-display-name':
+        this.step = 'team-a-voice-name'
+        this.prompt = voiceNameQuestion()
+        break
+      case 'team-a-voice-name':
+        this.step = 'team-b-display-name'
+        this.prompt = 'Dites le nom de la deuxième équipe.'
+        break
+      case 'team-b-display-name':
+        this.step = 'team-b-voice-name'
+        this.prompt = voiceNameQuestion()
+        break
+      case 'team-b-voice-name':
+        this.step = 'server'
+        this.prompt = 'Qui sert ?'
+        break
+      case 'server':
+        this.step = 'confirmation'
+        this.prompt = 'Dites Démarrer ou Recommencer.'
+        break
+    }
+    this.message = ''
   }
 
   private result(

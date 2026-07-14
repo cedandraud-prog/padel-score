@@ -159,7 +159,7 @@ export function MatchScreen({
           {snapshot.microphoneStatus === 'listening'
             ? 'Microphone en écoute'
             : snapshot.microphoneStatus === 'starting'
-              ? 'Démarrage de l’écoute'
+              ? 'Préparation du microphone'
               : snapshot.microphoneStatus === 'speaking'
                 ? 'Annonce en cours — écoute suspendue'
                 : snapshot.microphoneStatus === 'unavailable'

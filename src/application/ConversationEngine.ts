@@ -48,8 +48,9 @@ export class ConversationEngine {
     }
   }
 
-  start(): ConversationIntent[] {
+  start(expectsResponse = false): ConversationIntent[] {
     this.running = true
+    this.expectsResponse = expectsResponse
     this.state = 'STARTING_LISTENING'
     return this.emitMany([
       { type: 'StartRecognition' },

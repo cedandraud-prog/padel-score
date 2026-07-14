@@ -35,11 +35,16 @@ export function usableRecognitionConfidence(
 
 export interface RecognitionHandlers {
   onStart(): void
+  onAudioStart?(source?: AudioReadinessSource): void
+  onSpeechStart?(): void
+  onSpeechEnd?(): void
   onDiagnostic(diagnostics: RecognitionResultDiagnostics): void
   onResult(result: SpeechTranscript): void
   onError(code: VoiceErrorCode, message: string): void
   onEnd(): void
 }
+
+export type AudioReadinessSource = 'audiostart' | 'onstart-fallback'
 
 export interface RecognitionAdapter {
   readonly isSupported: boolean

@@ -14,7 +14,7 @@ interface VoiceDiagnosticsProps {
 
 const microphoneLabels = {
   inactive: 'Inactif',
-  starting: 'Démarrage de l’écoute',
+  starting: 'Préparation du microphone',
   listening: 'Écoute active',
   speaking: 'Annonce en cours',
   disabled: 'Écoute désactivée',
@@ -130,6 +130,11 @@ export function VoiceDiagnostics({
 }: VoiceDiagnosticsProps) {
   const recognition = snapshot.recognitionDiagnostics
   const connection = snapshot.connectionQuality
+  const timing = snapshot.recognitionTiming
+  const duration = (value: number | null) =>
+    value === null ? '—' : `${value} ms`
+  const timestamp = (value: number | null) =>
+    value === null ? '—' : new Date(value).toISOString()
 
   return (
     <details
@@ -312,6 +317,60 @@ export function VoiceDiagnostics({
         <div>
           <dt>Cycle de reconnaissance</dt>
           <dd>{snapshot.recognitionLifecycle}</dd>
+        </div>
+        <div>
+          <dt>Dernière génération mesurée</dt>
+          <dd>{timing.generation ?? '—'}</dd>
+        </div>
+        <div>
+          <dt>Disponibilité audio</dt>
+          <dd>{timing.audioReadinessSource ?? '—'}</dd>
+        </div>
+        <div>
+          <dt>Demande de démarrage</dt>
+          <dd>{timestamp(timing.startRequestedAt)}</dd>
+        </div>
+        <div>
+          <dt>start() → onstart</dt>
+          <dd>{duration(timing.startToOnStartMs)}</dd>
+        </div>
+        <div>
+          <dt>onstart → onaudiostart</dt>
+          <dd>{duration(timing.onStartToAudioStartMs)}</dd>
+        </div>
+        <div>
+          <dt>Début du bip</dt>
+          <dd>{timestamp(timing.beepStartedAt)}</dd>
+        </div>
+        <div>
+          <dt>Fin du bip</dt>
+          <dd>{timestamp(timing.beepEndedAt)}</dd>
+        </div>
+        <div>
+          <dt>Fin du bip → début de parole</dt>
+          <dd>{duration(timing.beepEndToSpeechStartMs)}</dd>
+        </div>
+        <div>
+          <dt>Durée de parole</dt>
+          <dd>{duration(timing.speechDurationMs)}</dd>
+        </div>
+        <div>
+          <dt>Fin de parole → résultat</dt>
+          <dd>{duration(timing.speechEndToResultMs)}</dd>
+        </div>
+        <div>
+          <dt>Fin du bip → résultat</dt>
+          <dd>{duration(timing.beepEndToResultMs)}</dd>
+        </div>
+        <div>
+          <dt>Décision du résultat</dt>
+          <dd>
+            {timing.decision} — génération {timing.decisionGeneration ?? '—'}
+          </dd>
+        </div>
+        <div>
+          <dt>Motif de la décision</dt>
+          <dd>{timing.decisionReason || '—'}</dd>
         </div>
         <div>
           <dt>Intention d’écoute</dt>

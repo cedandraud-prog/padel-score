@@ -9,6 +9,9 @@ class BrowserRecognitionMock {
   maxAlternatives = 0
   onresult = null
   onstart: (() => void) | null = null
+  onaudiostart: (() => void) | null = null
+  onspeechstart: (() => void) | null = null
+  onspeechend: (() => void) | null = null
   onerror = null
   onend: (() => void) | null = null
   readonly start = vi.fn()
@@ -18,6 +21,7 @@ class BrowserRecognitionMock {
 function handlers(): RecognitionHandlers {
   return {
     onStart: vi.fn(),
+    onAudioStart: vi.fn(),
     onDiagnostic: vi.fn(),
     onResult: vi.fn(),
     onError: vi.fn(),
@@ -30,6 +34,29 @@ afterEach(() => {
 })
 
 describe('SpeechRecognitionService', () => {
+  it('distingue le démarrage du moteur du début réel de capture audio', () => {
+    const recognition = new BrowserRecognitionMock()
+    vi.stubGlobal('window', {
+      webkitSpeechRecognition: class {
+        constructor() {
+          return recognition
+        }
+      },
+    })
+    const service = new SpeechRecognitionService()
+    const callbacks = handlers()
+
+    service.start(callbacks)
+    recognition.onstart?.()
+
+    expect(callbacks.onStart).toHaveBeenCalledOnce()
+    expect(callbacks.onAudioStart).not.toHaveBeenCalled()
+
+    recognition.onaudiostart?.()
+
+    expect(callbacks.onAudioStart).toHaveBeenCalledOnce()
+  })
+
   it('protège un démarrage déjà en cours', () => {
     const recognition = new BrowserRecognitionMock()
     vi.stubGlobal('window', {
@@ -45,6 +72,25 @@ describe('SpeechRecognitionService', () => {
     service.start(handlers())
 
     expect(recognition.start).toHaveBeenCalledOnce()
+  })
+
+  it('identifie le fallback onstart lorsque audiostart n’est pas exposé', () => {
+    const recognition = new BrowserRecognitionMock()
+    delete (recognition as { onaudiostart?: (() => void) | null }).onaudiostart
+    vi.stubGlobal('window', {
+      webkitSpeechRecognition: class {
+        constructor() {
+          return recognition
+        }
+      },
+    })
+    const service = new SpeechRecognitionService()
+    const callbacks = handlers()
+
+    service.start(callbacks)
+    recognition.onstart?.()
+
+    expect(callbacks.onAudioStart).toHaveBeenCalledWith('onstart-fallback')
   })
 
   it('conserve une seule session technique active après onstart', () => {

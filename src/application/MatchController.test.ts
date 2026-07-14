@@ -26,6 +26,10 @@ function matchConfiguration(
   }
 }
 
+async function flushAsyncWork(): Promise<void> {
+  for (let index = 0; index < 10; index += 1) await Promise.resolve()
+}
+
 class MockRecognition implements RecognitionAdapter {
   startCount = 0
   stopCount = 0
@@ -42,7 +46,10 @@ class MockRecognition implements RecognitionAdapter {
     this.startCount += 1
     this.handlers = handlers
     this.sessionHandlers.push(handlers)
-    if (this.autoStart) handlers.onStart()
+    if (this.autoStart) {
+      handlers.onStart()
+      handlers.onAudioStart?.()
+    }
   }
 
   stop(): void {
@@ -242,6 +249,40 @@ describe('MatchController', () => {
     await controller.handleTranscript({ transcript: 'Orqués', confidence: 0.9 })
 
     expect(controller.getSnapshot().display.teams.B.points).toBe('15')
+  })
+
+  it.each(['gagné', 'gagner'])(
+    'reconnaît « %s » pour la consigne contrôlée « gagné »',
+    async (transcript) => {
+      const configuration = matchConfiguration('Champions', 'Invincibles')
+      configuration.teamA.voiceName = 'gagné'
+      configuration.teamB.voiceName = 'perdu'
+      const controller = new MatchController(
+        new MockRecognition(),
+        new MockSynthesis(),
+      )
+      controller.startMatch({ configuration })
+
+      await controller.handleTranscript({ transcript })
+
+      expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+    },
+  )
+
+  it('ne rapproche pas approximativement un nom affiché libre', async () => {
+    const configuration = matchConfiguration('Gagné', 'Invincibles')
+    configuration.teamA.voiceName = 'Rouge'
+    configuration.teamB.voiceName = 'Bleu'
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.startMatch({ configuration })
+
+    await controller.handleTranscript({ transcript: 'gagner' })
+
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+    expect(controller.getSnapshot().lastCommand).toBe('Commande inconnue')
   })
 
   it('rejette une commande inconnue sans modifier le score', async () => {
@@ -760,9 +801,10 @@ describe('MatchController', () => {
     const recognition = new MockRecognition()
     const synthesis = new DeferredSynthesis()
     const { controller } = createController(recognition, synthesis)
+    const stopsBeforeAnnouncement = recognition.stopCount
 
     const pointPromise = controller.awardPoint('A')
-    expect(recognition.stopCount).toBe(1)
+    expect(recognition.stopCount).toBe(stopsBeforeAnnouncement + 1)
     expect(recognition.startCount).toBe(1)
     expect(controller.getSnapshot().microphoneStatus).toBe('speaking')
 
@@ -790,7 +832,7 @@ describe('MatchController', () => {
     const { controller } = createController(recognition)
 
     recognition.endUnexpectedly()
-    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    expect(controller.getSnapshot().microphoneStatus).toBe('starting')
     vi.advanceTimersByTime(250)
 
     expect(recognition.startCount).toBe(2)
@@ -1154,6 +1196,61 @@ describe('MatchController configuration', () => {
     expect(controller.getSnapshot().phase).toBe('match')
   })
 
+  it('redémarre proprement la session vocale entre la configuration manuelle et le match', async () => {
+    const recognition = new MockRecognition(true, false)
+    const readiness = new MockReadinessCue()
+    const controller = new MatchController(
+      recognition,
+      new MockSynthesis(),
+      undefined,
+      undefined,
+      readiness,
+    )
+    controller.beginConfigurationExperience()
+    controller.listenForNewMatch()
+    const setupHandlers = recognition.handlers
+    setupHandlers?.onStart()
+    setupHandlers?.onAudioStart?.('audiostart')
+
+    const configuration = matchConfiguration('Champions', 'Invincibles')
+    configuration.teamA.voiceName = 'Rouge'
+    configuration.teamB.voiceName = 'Bleu'
+    controller.updateEditingConfiguration(configuration)
+    controller.startConfiguredMatch({ configuration })
+
+    expect(recognition.stopCount).toBe(1)
+    expect(recognition.startCount).toBe(2)
+    expect(controller.getSnapshot().phase).toBe('match')
+    expect(controller.getSnapshot().microphoneStatus).toBe('starting')
+    expect(controller.getSnapshot().conversation.state).toBe(
+      'STARTING_LISTENING',
+    )
+
+    setupHandlers?.onResult({ transcript: 'Rouge' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+    expect(controller.getSnapshot().lastCommand).toBe(
+      'Résultat d’une ancienne session ignoré',
+    )
+
+    const matchHandlers = recognition.handlers
+    matchHandlers?.onStart()
+    expect(controller.getSnapshot().microphoneStatus).toBe('starting')
+    matchHandlers?.onAudioStart?.('audiostart')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    expect(readiness.playCount).toBe(1)
+    matchHandlers?.onResult({ transcript: 'Rouge' })
+    await flushAsyncWork()
+
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+    expect(controller.getSnapshot().recognitionTiming.decision).toBe('accepted')
+    expect(controller.getSnapshot().recognitionTiming.decisionGeneration).toBe(
+      2,
+    )
+  })
+
   it('mène le parcours vocal direct jusqu’au match', async () => {
     const controller = new MatchController(
       new MockRecognition(),
@@ -1322,7 +1419,7 @@ describe('MatchController configuration', () => {
     expect(snapshot.editingConfiguration).toEqual(
       createDefaultMatchConfiguration(),
     )
-    expect(snapshot.lastCommand).toBe('Transcription vocale obsolète ignorée')
+    expect(snapshot.lastCommand).toBe('Résultat d’une ancienne session ignoré')
   })
 
   it('Recommencer ne modifie pas un match déjà lancé', async () => {
@@ -1366,8 +1463,48 @@ describe('MatchController configuration', () => {
       controller.getSnapshot().editingConfiguration.teamA.displayName,
     ).toBe('Valeur manuelle')
     expect(controller.getSnapshot().lastCommand).toBe(
-      'Transcription vocale obsolète ignorée',
+      'Résultat d’une ancienne session ignoré',
     )
+  })
+
+  it('reprend une seule écoute après validation clavier quand elle était active', async () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    await controller.startVoiceSetup()
+    expect(recognition.startCount).toBe(1)
+
+    controller.disableListening()
+    const edited = controller.getSnapshot().editingConfiguration
+    edited.teamA.displayName = 'Valeur manuelle'
+    controller.updateEditingConfiguration(edited, 'teamA.displayName')
+
+    expect(recognition.startCount).toBe(1)
+    expect(controller.getSnapshot().voiceSetup?.step).toBe('team-a-voice-name')
+    expect(controller.getSnapshot().voiceSetup?.prompt).toBe(
+      'Quelle consigne vocale pour cette équipe ?',
+    )
+
+    controller.enableListening()
+    controller.enableListening()
+
+    expect(recognition.startCount).toBe(2)
+    expect(controller.getSnapshot().conversation.isRunning).toBe(true)
+    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+  })
+
+  it('ne réactive pas une écoute volontairement inactive après une saisie clavier', async () => {
+    const recognition = new MockRecognition()
+    const controller = new MatchController(recognition, new MockSynthesis())
+    await controller.startVoiceSetup()
+    controller.disableListening()
+    const edited = controller.getSnapshot().editingConfiguration
+    edited.teamA.displayName = 'Valeur manuelle'
+
+    controller.updateEditingConfiguration(edited, 'teamA.displayName')
+
+    expect(recognition.startCount).toBe(1)
+    expect(controller.getSnapshot().conversation.isRunning).toBe(false)
+    expect(controller.getSnapshot().microphoneStatus).toBe('disabled')
   })
 
   it('conserve une modification manuelle du serveur au démarrage', () => {
@@ -1463,11 +1600,12 @@ describe('MatchController configuration', () => {
       configuration: matchConfiguration('Champions', 'Invincibles'),
       feedbackMode: 'BEEP',
     })
+    await Promise.resolve()
 
     await controller.handleTranscript({ transcript: 'Corrige' })
 
     expect(feedback.plays).toEqual(['BEEP'])
-    expect(readiness.playCount).toBe(1)
+    expect(readiness.playCount).toBe(2)
   })
 
   it('ne joue aucun bip de disponibilité après une action sans réponse attendue', async () => {
@@ -1482,8 +1620,10 @@ describe('MatchController configuration', () => {
     controller.startMatch({
       configuration: matchConfiguration('Champions', 'Invincibles'),
     })
+    await Promise.resolve()
+    const initialReadyBeepCount = readiness.playCount
     await controller.handleTranscript({ transcript: 'Alpha' })
-    expect(readiness.playCount).toBe(0)
+    expect(readiness.playCount).toBe(initialReadyBeepCount)
   })
 })
 
@@ -1625,7 +1765,7 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     expect(readiness.playCount).toBe(0)
   })
 
-  it('onstart passe à PLAYER_LISTENING', async () => {
+  it('audiostart passe à PLAYER_LISTENING après onstart', async () => {
     const recognition = new MockRecognition(true, false)
     const controller = new MatchController(recognition, new MockSynthesis())
     controller.startMatch({
@@ -1633,8 +1773,125 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     })
     recognition.handlers?.onStart()
     await Promise.resolve()
+    expect(controller.getSnapshot().conversation.state).toBe(
+      'STARTING_LISTENING',
+    )
+    recognition.handlers?.onAudioStart?.()
+    await Promise.resolve()
     expect(controller.getSnapshot().conversation.state).toBe('PLAYER_LISTENING')
     expect(controller.getSnapshot().message).toBe('À vous de parler')
+  })
+
+  it('joue un seul bip sur audiostart et accepte la réponse suivante', async () => {
+    const recognition = new MockRecognition(true, false)
+    const readiness = new MockReadinessCue()
+    const controller = new MatchController(
+      recognition,
+      new MockSynthesis(),
+      undefined,
+      undefined,
+      readiness,
+    )
+    await controller.startVoiceSetup()
+    const activeHandlers = recognition.handlers
+
+    activeHandlers?.onStart()
+    await Promise.resolve()
+    expect(readiness.playCount).toBe(0)
+
+    activeHandlers?.onAudioStart?.()
+    activeHandlers?.onAudioStart?.()
+    await Promise.resolve()
+    expect(readiness.playCount).toBe(1)
+
+    activeHandlers?.onResult({ transcript: 'Champions' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(
+      controller.getSnapshot().editingConfiguration.teamA.displayName,
+    ).toBe('Champions')
+    const trace = controller.getSnapshot().voiceTrace
+    const onStartIndex = trace.findIndex(({ type }) => type === 'ONSTART')
+    const audioStartIndex = trace.findIndex(({ type }) => type === 'AUDIOSTART')
+    const readyBeepIndex = trace.findIndex(
+      ({ soundType }) => soundType === 'READY_BEEP',
+    )
+    expect(onStartIndex).toBeLessThan(audioStartIndex)
+    expect(audioStartIndex).toBeLessThan(readyBeepIndex)
+  })
+
+  it('mesure séparément disponibilité, parole et retour du résultat', async () => {
+    let clock = 1_000
+    const recognition = new MockRecognition(true, false)
+    const readiness = new DeferredReadinessCue()
+    const controller = new MatchController(
+      recognition,
+      new MockSynthesis(),
+      undefined,
+      () => clock,
+      readiness,
+    )
+    controller.startMatch({
+      configuration: matchConfiguration('Rouge', 'Bleu'),
+    })
+
+    clock = 1_100
+    recognition.handlers?.onStart()
+    clock = 1_250
+    recognition.handlers?.onAudioStart?.('audiostart')
+    await Promise.resolve()
+    recognition.handlers?.onSpeechStart?.()
+
+    clock = 1_300
+    readiness.finishCue()
+    await Promise.resolve()
+    await Promise.resolve()
+    clock = 1_320
+    recognition.handlers?.onSpeechStart?.()
+    clock = 1_520
+    recognition.handlers?.onSpeechEnd?.()
+    clock = 4_520
+    recognition.handlers?.onResult({ transcript: 'Rouge' })
+    await flushAsyncWork()
+
+    expect(controller.getSnapshot().recognitionTiming).toMatchObject({
+      generation: 1,
+      audioReadinessSource: 'audiostart',
+      startRequestedAt: 1_000,
+      startToOnStartMs: 100,
+      onStartToAudioStartMs: 150,
+      beepStartedAt: 1_250,
+      beepEndedAt: 1_300,
+      beepEndToSpeechStartMs: 20,
+      speechDurationMs: 200,
+      speechEndToResultMs: 3_000,
+      beepEndToResultMs: 3_220,
+      decision: 'accepted',
+      decisionGeneration: 1,
+    })
+  })
+
+  it('accepte un résultat tardif de la génération active', async () => {
+    let clock = 0
+    const recognition = new MockRecognition(true, false)
+    const controller = new MatchController(
+      recognition,
+      new MockSynthesis(),
+      undefined,
+      () => clock,
+    )
+    controller.startMatch({
+      configuration: matchConfiguration('Rouge', 'Bleu'),
+    })
+    recognition.handlers?.onStart()
+    recognition.handlers?.onAudioStart?.('audiostart')
+    clock = 10_000
+    recognition.handlers?.onResult({ transcript: 'Rouge' })
+    await flushAsyncWork()
+
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+    expect(controller.getSnapshot().recognitionTiming.decision).toBe('accepted')
   })
 
   it('ne relance pas un démarrage déjà en cours', () => {
@@ -1689,6 +1946,8 @@ describe('MatchController démarrage réel de la reconnaissance', () => {
     })
     recognition.handlers?.onStart()
     await Promise.resolve()
+    recognition.handlers?.onAudioStart?.()
+    await Promise.resolve()
     vi.advanceTimersByTime(3_000)
     expect(controller.getSnapshot().message).toBe('À vous de parler')
     expect(controller.getSnapshot().microphoneStatus).toBe('listening')
@@ -1742,6 +2001,7 @@ describe('MatchController écoute fonctionnellement continue', () => {
     controller.startMatch({
       configuration: matchConfiguration('Champions', 'Invincibles'),
     })
+    const initialReadyBeepCount = readiness.playCount
     controller.resetVoiceMetrics()
 
     recognition.endUnexpectedly()
@@ -1764,13 +2024,14 @@ describe('MatchController écoute fonctionnellement continue', () => {
         attemptId: 2,
       }),
       expect.objectContaining({ type: 'ONSTART', attemptId: 2 }),
+      expect.objectContaining({ type: 'AUDIOSTART', attemptId: 2 }),
     ])
     expect(
       controller
         .getSnapshot()
         .voiceTrace.some(({ type }) => type === 'APPLICATION_SOUND'),
     ).toBe(false)
-    expect(readiness.playCount).toBe(0)
+    expect(readiness.playCount).toBe(initialReadyBeepCount)
     expect(feedback.plays).toEqual([])
   })
 
@@ -1784,7 +2045,7 @@ describe('MatchController écoute fonctionnellement continue', () => {
 
     recognition.endUnexpectedly()
 
-    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    expect(controller.getSnapshot().microphoneStatus).toBe('starting')
     expect(controller.getSnapshot().conversation.state).toBe('PLAYER_LISTENING')
     expect(controller.getSnapshot().continuousListening.restartPending).toBe(
       true,
@@ -1835,6 +2096,7 @@ describe('MatchController écoute fonctionnellement continue', () => {
         attemptId: 2,
       }),
       expect.objectContaining({ type: 'ONSTART', attemptId: 2 }),
+      expect.objectContaining({ type: 'AUDIOSTART', attemptId: 2 }),
     ])
     controller.destroy()
     vi.useRealTimers()
@@ -1880,7 +2142,7 @@ describe('MatchController écoute fonctionnellement continue', () => {
 
     session?.onError('no-speech', 'Aucune parole détectée.')
     session?.onEnd()
-    expect(controller.getSnapshot().microphoneStatus).toBe('listening')
+    expect(controller.getSnapshot().microphoneStatus).toBe('starting')
     vi.advanceTimersByTime(500)
 
     expect(recognition.startCount).toBe(2)
@@ -2186,7 +2448,7 @@ describe('MatchController session de jeu', () => {
     expect(recognition.startCount).toBe(1)
   })
 
-  it('annonce le premier prompt puis attend onstart avant le bip', async () => {
+  it('annonce le premier prompt puis attend audiostart avant le bip', async () => {
     const recognition = new MockRecognition(true, false)
     const synthesis = new MockSynthesis()
     const readiness = new MockReadinessCue()
@@ -2204,6 +2466,9 @@ describe('MatchController session de jeu', () => {
     expect(synthesis.spoken).toContain('Nom de la première équipe ?')
     expect(readiness.playCount).toBe(0)
     recognition.handlers?.onStart()
+    await Promise.resolve()
+    expect(readiness.playCount).toBe(0)
+    recognition.handlers?.onAudioStart?.()
     await Promise.resolve()
     expect(readiness.playCount).toBe(1)
   })
