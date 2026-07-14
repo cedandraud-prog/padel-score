@@ -2,9 +2,10 @@
 
 ## Statut du document
 
-Design d’implémentation proposé à partir de l’ADR-011 acceptée et de l’état réel
-du code. Ce document ne constitue pas une implémentation et ne valide pas encore
-l’expérience PLAYER+ sur le terrain.
+Plan progressif issu de l’ADR-011 acceptée. TASK-016, ses correctifs 016.2 à
+016.4 et TASK-017 sont réalisés et validés techniquement ainsi que sur la
+Preview PWA. PLAYER+ reste une expérience en construction : sa configuration
+est disponible, mais aucun match PLAYER+ ne peut encore démarrer.
 
 ## 1. Décision d’architecture
 
@@ -36,27 +37,28 @@ Il ne sélectionne pas une nouvelle application.
 
 ### Configuration
 
-- `MatchConfiguration` connaît deux équipes, leurs noms affichés, leurs noms
-  vocaux et l’équipe au service.
-- `VoiceMatchSetup` porte un parcours linéaire exclusivement PLAYER.
-- `MatchSetup` présente les valeurs obtenues mais ne propose pas encore les
-  champs clavier prévus par l’ADR-011.
-- `MatchController` possède déjà un brouillon unique, une révision de saisie et
-  une protection contre une transcription vocale tardive.
-- Le démarrage relit la configuration transmise, la valide, puis construit un
-  nouveau `ScoreEngine`.
+- PLAYER reste le mode par défaut et son parcours est stable.
+- PLAYER et PLAYER+ sont sélectionnables dans la même configuration guidée.
+- En PLAYER+, les quatre joueurs, les positions droite/gauche, l’inversion des
+  côtés, les consignes et le premier serveur peuvent être renseignés par la voix
+  ou au clavier.
+- La reprise vocale, les alias contrôlés « gagné » et « gagner », le bip de
+  disponibilité et le redémarrage contrôlé de la reconnaissance à l’entrée du
+  match ont été validés sur la Preview PWA.
+- Le démarrage PLAYER+ reste désactivé avec la mention « Bientôt disponible » :
+  ce brouillon n’est pas connecté au moteur.
 
 ### Score et service
 
 - `ScoreEngine` calcule les points, jeux, sets et tie-breaks sans dépendance à
   React, au navigateur ou à la voix.
-- `MatchState` stocke actuellement `servingTeam` et
-  `tieBreakInitialServer` au niveau de l’équipe.
+- `MatchState` contient un `ServiceState` PLAYER avec l’équipe au service et
+  l’ancre du tie-break.
 - Le service change d’équipe après un jeu. En tie-break, une fonction pure
   calcule l’équipe au service à partir de l’équipe initiale et du nombre de
   points joués.
-- Le serveur présenté peut être inversé par `MatchController` avec le booléen
-  `servingTeamSwapped`. Cet état est extérieur au moteur et à son historique.
+- `ScoreEngine` est l’unique source de vérité du service affiché et annoncé.
+- `servingTeamSwapped` a été supprimé.
 
 ### Historique et corrections
 
@@ -64,9 +66,8 @@ Il ne sélectionne pas une nouvelle application.
   du `MatchState` avant mutation.
 - `undo()` restaure exactement cet instantané, y compris après un jeu, un set,
   un tie-break ou une correction de points.
-- La correction actuelle du serveur n’est pas une action du `ScoreEngine` : le
-  booléen applicatif n’est donc pas restauré par le même historique. Cette dette
-  doit être supprimée avant d’ajouter la correction d’un serveur individuel.
+- La correction du serveur est une action du `ScoreEngine`, historisée sans
+  modifier le score. `undo()` restaure le serveur et l’ancre précédents.
 - Une correction de points pendant un tie-break recalcule déjà le service à
   partir de l’ancre du tie-break. PLAYER+ doit conserver ce principe avec une
   ancre individuelle.
@@ -222,7 +223,17 @@ Ne pas introduire immédiatement une hiérarchie de classes `ServicePolicy`.
 Une interface polymorphe stockée dans le moteur compliquerait inutilement la
 copie des instantanés, l’égalité d’état et les tests.
 
-Utiliser d’abord une union discriminée de données et des fonctions pures :
+Le comportement PLAYER validé utilise aujourd’hui cette donnée historisée :
+
+```ts
+interface ServiceState {
+  servingTeam: TeamId
+  tieBreakInitialServer: TeamId | null
+}
+```
+
+L’extension future à PLAYER+ reste prévue sous forme d’union discriminée et de
+fonctions pures :
 
 ```ts
 type ServiceState =
@@ -256,7 +267,7 @@ données.
 
 `ServiceState` appartient au `MatchState` et à ses instantanés. Les champs
 `isServing`, le libellé du serveur et le prochain serveur sont toujours dérivés.
-Le booléen applicatif `servingTeamSwapped` disparaît.
+Le booléen applicatif `servingTeamSwapped` a disparu avec TASK-017.
 
 Pour PLAYER, cette structure conserve exactement le comportement actuel. Pour
 PLAYER+, le cycle d’un set est par exemple `A1 → B1 → A2 → B2` et avance après
@@ -348,23 +359,27 @@ reçoit `ServicePresentation` :
 
 ## 9. Découpage proposé
 
-PLAYER+ reste masqué derrière un garde de disponibilité tant que le parcours
-complet n’est pas livré. Les étapes intermédiaires restent néanmoins vérifiables
-par tests de contrat et d’intégration, sans afficher un mode partiellement
-fonctionnel aux joueurs.
+PLAYER+ est sélectionnable et configurable afin de valider progressivement son
+parcours. Son démarrage reste protégé par un garde de disponibilité tant que le
+parcours complet n’est pas livré.
 
 ### TASK-016 — Unifier le brouillon de configuration
+
+**Statut : réalisée et validée sur la Preview PWA**, avec ses correctifs 016.2,
+016.3 et 016.4.
 
 - introduire le discriminant `mode` avec PLAYER par défaut ;
 - adapter la configuration existante sans changer le parcours PLAYER ;
 - permettre à voix et clavier d’écrire dans le même brouillon ;
 - centraliser validation, copie, révision et reset ;
-- ne pas encore rendre PLAYER+ sélectionnable.
+- rendre PLAYER+ sélectionnable tout en maintenant son démarrage désactivé.
 
 Validation intermédiaire : parcours PLAYER vocal, manuel et mixte ; priorité de
 la saisie récente ; régression complète du démarrage actuel.
 
 ### TASK-017 — Rendre le service PLAYER historisable
+
+**Statut : réalisée et validée sur la Preview PWA.**
 
 - introduire `ServiceState` dans le `MatchState` ;
 - adapter le comportement PLAYER à la branche `PLAYER` ;
@@ -377,6 +392,9 @@ après refactoring, plus annulation d’une correction de serveur.
 
 ### TASK-018 — Ajouter les participants et le service PLAYER+
 
+**Statut : prochaine étape candidate, à analyser avant lancement.** Son
+périmètre n’est pas modifié par cette capitalisation.
+
 - ajouter les types joueur, position et ordre de service ;
 - valider les invariants PLAYER+ ;
 - implémenter la branche `PLAYERS_PLUS` des fonctions pures de service ;
@@ -387,6 +405,11 @@ Validation intermédiaire : tests unitaires et tests de contrat exécutés sur l
 deux modes, sans exposition utilisateur de PLAYER+.
 
 ### TASK-019 — Connecter la configuration PLAYER+
+
+**Statut : non réalisée.** Le sélecteur, la configuration guidée des joueurs,
+les positions, l’inversion des côtés et la saisie du premier serveur ont été
+anticipés par TASK-016. Cela ne connecte pas PLAYER+ au moteur et ne valide pas
+TASK-019.
 
 - rendre le sélecteur disponible ;
 - composer les champs des quatre joueurs et les positions ;
@@ -439,21 +462,22 @@ ils ne remplacent jamais les tests historiques.
 
 ## 11. Risques et parades
 
-| Risque                               | Parade                                                                      |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| Duplication PLAYER / PLAYER+         | Union discriminée aux frontières, fonctions et composants communs au centre |
-| Conditions de mode dispersées        | Brancher le mode uniquement dans configuration, service et présentation     |
-| Deux sources de vérité du serveur    | `ServiceState` dans `MatchState`, sorties toujours dérivées                 |
-| Régression PLAYER                    | PLAYER par défaut, tests de contrat et suite historique à chaque Task       |
-| `undo()` incohérent                  | État de service dans l’instantané, aucun historique applicatif parallèle    |
-| Tie-break incorrect après correction | Ancre individuelle explicite et tests table-driven sur chaque point         |
-| Confusion position/service           | Types et validateurs séparés ; aucune dérivation de l’un par l’autre        |
-| Configuration trop longue            | Valeurs de côté par défaut, aucune question vocale dédiée, mesure terrain   |
-| Voix et clavier divergents           | Un seul brouillon, mêmes commandes de modification et mêmes validateurs     |
-| Réponse vocale tardive               | Révision du brouillon conservée lors de chaque étape                        |
-| Choix du nouvel ordre trop intrusif  | État explicite entre les sets et test terrain avant enrichissement          |
-| PLAYER+ partiel visible              | Garde de disponibilité jusqu’à TASK-020                                     |
-| Homonymes de joueurs                 | Résolution exacte, clarification par équipe, blocage des homonymes internes |
+| Risque                                 | Parade                                                                       |
+| -------------------------------------- | ---------------------------------------------------------------------------- |
+| Duplication PLAYER / PLAYER+           | Union discriminée aux frontières, fonctions et composants communs au centre  |
+| Conditions de mode dispersées          | Brancher le mode uniquement dans configuration, service et présentation      |
+| Deux sources de vérité du serveur      | `ServiceState` dans `MatchState`, sorties toujours dérivées                  |
+| Régression PLAYER                      | PLAYER par défaut, tests de contrat et suite historique à chaque Task        |
+| `undo()` incohérent                    | État de service dans l’instantané, aucun historique applicatif parallèle     |
+| Tie-break incorrect après correction   | Ancre individuelle explicite et tests table-driven sur chaque point          |
+| Confusion position/service             | Types et validateurs séparés ; aucune dérivation de l’un par l’autre         |
+| Configuration trop longue              | Valeurs de côté par défaut, aucune question vocale dédiée, mesure terrain    |
+| Voix et clavier divergents             | Un seul brouillon, mêmes commandes de modification et mêmes validateurs      |
+| Réponse vocale tardive                 | Révision du brouillon conservée lors de chaque étape                         |
+| Choix du nouvel ordre trop intrusif    | État explicite entre les sets et test terrain avant enrichissement           |
+| PLAYER+ partiel visible                | Configuration explicite et démarrage indisponible jusqu’à livraison complète |
+| Transcription variable selon le réseau | Contrainte terrain suivie, sans correctif supposé sans cause déterministe    |
+| Homonymes de joueurs                   | Résolution exacte, clarification par équipe, blocage des homonymes internes  |
 
 ## 12. Review et validation
 

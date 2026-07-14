@@ -9,7 +9,24 @@
 - **Task 007.1** — Nom affiché et consigne vocale distincts avec parcours direct.
 - **ADR-011 / US-006** — Modes PLAYER et PLAYER+, positions droite/gauche,
   saisie vocale ou clavier et politiques de service distinctes.
+- **TASK-016, 016.2, 016.3 et 016.4 — validées** — Configuration guidée PLAYER
+  et PLAYER+, saisie voix/clavier, reprise vocale, bip de disponibilité et entrée
+  contrôlée dans le match.
+- **TASK-017 — validée** — `ServiceState` PLAYER historisé dans le
+  `ScoreEngine`, correction du serveur annulable et suppression de
+  `servingTeamSwapped`.
+- **TASK-018 — prochaine étape candidate** — Participants et service individuel
+  PLAYER+, sous réserve d’une analyse de périmètre avant lancement.
 - **CAMP-001** — Validation de l’expérience pendant un vrai match.
+
+PLAYER+ est actuellement sélectionnable et configurable, mais reste non
+démarrable et non connecté au moteur. Certains éléments initialement envisagés
+pour TASK-019 sont déjà visibles dans la configuration ; TASK-019 n’est pas pour
+autant réalisée.
+
+La variabilité de transcription selon les conditions réseau reste une contrainte
+terrain connue. Aucun correctif déterministe ni nouvelle fonctionnalité n’est
+planifié sans observation plus précise de sa cause.
 
 ## Trajectoire produit
 

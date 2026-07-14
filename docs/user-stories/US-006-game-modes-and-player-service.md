@@ -2,7 +2,12 @@
 
 ## Statut
 
-Ready for Task — ADR-011 Accepted, implémentation non commencée.
+Partiellement réalisée — ADR-011 Accepted.
+
+La configuration commune et le service PLAYER historisé sont validés
+techniquement et sur la Preview PWA. PLAYER+ est sélectionnable et configurable,
+mais son démarrage, sa rotation individuelle et sa connexion au moteur ne sont
+pas encore implémentés.
 
 ## User Story principale
 
@@ -56,8 +61,11 @@ l'affichage du terrain et de futures statistiques droite/gauche.
 2. répondre vocalement ou au clavier à chaque question ;
 3. consulter les valeurs dans un brouillon unique ;
 4. en PLAYER+, inverser éventuellement les côtés ;
-5. démarrer vocalement ou avec « Démarrer le match » lorsque le brouillon est
-   valide.
+5. démarrer vocalement ou avec « Démarrer le match » en PLAYER lorsque le
+   brouillon est valide.
+
+En PLAYER+, les valeurs sont saisissables et visibles, mais le démarrage reste
+désactivé avec la mention « Bientôt disponible ».
 
 Changer de mode remet entièrement le brouillon à zéro. Aucune conversion n'est
 effectuée.
@@ -90,7 +98,7 @@ effectuée.
 - une transcription tardive ne remplace pas une saisie manuelle plus récente ;
 - le bouton de démarrage reste désactivé tant que le brouillon est invalide.
 
-## Critères d'acceptation documentaires
+## État des critères d’acceptation
 
 1. PLAYER reste strictement limité aux équipes.
 2. PLAYER+ connaît exactement quatre joueurs.
@@ -103,20 +111,26 @@ effectuée.
 9. Les règles de tie-break existantes sont conservées dans chaque mode.
 10. La saisie vocale et le clavier utilisent un brouillon unique.
 11. Changer de mode réinitialise la configuration.
-12. Aucune implémentation n'est incluse dans cette mission.
+12. PLAYER démarre avec le comportement historique inchangé.
+13. PLAYER+ reste non démarrable tant que son service individuel n’est pas relié
+    au moteur.
 
-## Tests à prévoir dans la future Task
+Les critères de configuration 1 à 8, 10 et 11 sont représentés dans le parcours
+validé. Le critère 9 est validé pour PLAYER uniquement ; les règles de rotation
+et de tie-break PLAYER+ restent à implémenter dans le moteur. Le service PLAYER
+et son `undo()` sont validés.
 
-- sélection et changement de mode ;
-- parcours vocal, manuel et mixte ;
-- positions droite/gauche par défaut ;
-- inversion des côtés sans perte de données ;
-- refus de deux positions identiques ;
-- conservation du premier serveur après inversion ;
-- alternance des équipes en PLAYER ;
+## Tests restant à prévoir
+
+- invariants complets des participants et de l’ordre individuel ;
 - cycle individuel en PLAYER+ ;
-- tie-break des deux modes ;
-- correction et `undo()` indépendants des positions.
+- tie-break PLAYER+ ;
+- correction et `undo()` du serveur individuel indépendamment des positions ;
+- connexion du brouillon PLAYER+ au moteur sans régression PLAYER.
+
+La sélection de mode, le parcours guidé voix/clavier, les positions, l’inversion
+des côtés, le service PLAYER et son historique sont déjà couverts par les tests
+actuels.
 
 ## Questions ouvertes
 
@@ -128,9 +142,8 @@ effectuée.
 - nouvel ordre de service au début d'un set ;
 - remplacement d'un joueur.
 
-## Hors périmètre
+## Hors périmètre actuel
 
-- implémentation ;
 - statistiques ;
 - persistance ;
 - remplacement de joueur ;

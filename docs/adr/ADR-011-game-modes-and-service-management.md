@@ -4,6 +4,11 @@
 
 Accepted — amendée par ADR-011.1 le 2026-07-13.
 
+État d’application au 2026-07-14 : TASK-016, ses correctifs 016.2 à 016.4 et
+TASK-017 sont réalisés et validés techniquement ainsi que sur la Preview PWA.
+PLAYER est opérationnel. PLAYER+ est sélectionnable et configurable, mais reste
+non démarrable et non connecté au moteur.
+
 ## Contexte
 
 Les premiers tests terrain font apparaître deux attentes légitimes : commencer
@@ -24,8 +29,26 @@ Le mode est choisi avant de renseigner la configuration. La voix reste l'entrée
 principale, mais chaque question accepte aussi une réponse au clavier. Toutes les
 entrées modifient le même brouillon.
 
-Le bouton « Démarrer le match » est disponible dans les deux modes et reste
-désactivé tant que les informations obligatoires sont incomplètes ou invalides.
+À terme, le bouton « Démarrer le match » sera disponible dans les deux modes et
+restera désactivé tant que les informations obligatoires seront incomplètes ou
+invalides. Dans l’état validé actuel, seul PLAYER peut démarrer ; PLAYER+ affiche
+« Bientôt disponible ».
+
+## État validé de l’implémentation
+
+- PLAYER conserve son parcours et son moteur existants.
+- La configuration guidée permet de sélectionner PLAYER+ et de saisir ses
+  joueurs, positions, côtés, consignes et premier serveur par la voix ou au
+  clavier.
+- Cette configuration PLAYER+ reste un brouillon applicatif sans connexion au
+  `ScoreEngine`.
+- En PLAYER, `ServiceState` appartient au `MatchState` et à ses instantanés.
+- `ScoreEngine` est l’unique source de vérité du service ; la correction est
+  historisée et restaurée par `undo()`.
+- Le booléen applicatif `servingTeamSwapped` a été supprimé.
+- La qualité de transcription peut varier avec les conditions réseau. Cette
+  observation terrain reste une contrainte connue, sans correctif déterministe
+  décidé à ce stade.
 
 ## Comparaison
 
@@ -277,13 +300,18 @@ et aucun faux joueur n'est créé à partir d'un ancien nom d'équipe.
 
 ## Conséquences
 
-- `MatchConfiguration` devient une union discriminée par mode ;
+- la configuration prépare une union discriminée par mode ;
 - PLAYER conserve la gestion actuelle par équipe ;
+- l’état de service PLAYER est détenu et historisé par le `ScoreEngine` ;
 - PLAYER+ ajoute joueurs, positions et rotation individuelle ;
 - la configuration et la page score s'adaptent au mode ;
 - les annonces nomment une équipe en PLAYER et un joueur en PLAYER+ ;
 - les tests de service devront couvrir les deux politiques ;
 - les statistiques individuelles et par position restent hors implémentation.
+
+Les éléments d’interface PLAYER+ déjà présents anticipent une partie de la
+future connexion de configuration. Ils ne valent ni implémentation du service
+individuel, ni validation de TASK-019.
 
 ## Questions ouvertes
 

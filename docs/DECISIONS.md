@@ -25,3 +25,21 @@ Statut : validé
 - **DEC-012** — L’affichage s’inspire des tableaux de score du tennis.
 - **DEC-013** — Le premier test utilise le PC portable, le casque Bluetooth et l’enceinte Bluetooth de Cédric.
 - **DEC-014** — Aucune fonctionnalité ne doit être développée sans hypothèse à tester.
+
+## 2026-07-14 — Progression PLAYER / PLAYER+
+
+Statut : validé techniquement et sur la Preview PWA
+
+- **DEC-015** — PLAYER reste le mode stable et opérationnel ; les évolutions
+  PLAYER+ ne doivent pas le faire régresser.
+- **DEC-016** — PLAYER+ peut être sélectionné et configuré, mais reste non
+  démarrable avec la mention « Bientôt disponible » tant qu’il n’est pas relié
+  au moteur.
+- **DEC-017** — Le `ScoreEngine` est l’unique source de vérité du service PLAYER.
+  `ServiceState` appartient à `MatchState`, les corrections sont historisées et
+  `undo()` restaure leur état précédent.
+- **DEC-018** — La variabilité de transcription selon les conditions réseau est
+  une contrainte terrain connue. Aucun correctif n’est engagé sans cause
+  déterministe observée.
+- **DEC-019** — Les travaux restent conduits sur `test/task-016-pwa` ; `main`
+  demeure la version stable de production.
