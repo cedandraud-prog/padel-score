@@ -130,24 +130,20 @@ export function MatchSetup({
         <h2 id="setup-title">Configurer le match</h2>
         <fieldset className="quick-mode-selector">
           <legend className="sr-only">Mode de jeu</legend>
-          <label>
-            <input
-              type="radio"
-              name="setup-mode"
-              checked={mode === 'PLAYER'}
-              onChange={() => onModeChange('PLAYER')}
-            />
+          <button
+            type="button"
+            aria-pressed={mode === 'PLAYER'}
+            onClick={() => onModeChange('PLAYER')}
+          >
             PLAYER
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="setup-mode"
-              checked={mode === 'PLAYERS_PLUS'}
-              onChange={() => onModeChange('PLAYERS_PLUS')}
-            />
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === 'PLAYERS_PLUS'}
+            onClick={() => onModeChange('PLAYERS_PLUS')}
+          >
             PLAYER+
-          </label>
+          </button>
         </fieldset>
       </header>
 

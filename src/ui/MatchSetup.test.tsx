@@ -31,6 +31,25 @@ function render(mode: 'PLAYER' | 'PLAYERS_PLUS' = 'PLAYER') {
 }
 
 describe('MatchSetup', () => {
+  it('expose deux boutons de mode avec un état actif accessible', () => {
+    const playerHtml = render('PLAYER')
+    const playerPlusHtml = render('PLAYERS_PLUS')
+
+    expect(playerHtml).toContain(
+      '<button type="button" aria-pressed="true">PLAYER</button>',
+    )
+    expect(playerHtml).toContain(
+      '<button type="button" aria-pressed="false">PLAYER+</button>',
+    )
+    expect(playerPlusHtml).toContain(
+      '<button type="button" aria-pressed="false">PLAYER</button>',
+    )
+    expect(playerPlusHtml).toContain(
+      '<button type="button" aria-pressed="true">PLAYER+</button>',
+    )
+    expect(playerHtml).not.toContain('name="setup-mode"')
+  })
+
   it('affiche une configuration PLAYER directe avec les valeurs par défaut', () => {
     const html = render()
 

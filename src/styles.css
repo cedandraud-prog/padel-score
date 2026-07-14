@@ -6,9 +6,10 @@
   --color-text: #faf7f2;
   --color-text-muted: #b9bac1;
   --color-text-subtle: #898c96;
-  --color-accent: #5b5ff2;
-  --color-accent-hover: #7074ff;
-  --color-accent-soft: rgb(91 95 242 / 16%);
+  --color-accent-rgb: 63 81 215;
+  --color-accent: #3f51d7;
+  --color-accent-hover: #4c61e3;
+  --color-accent-soft: rgb(var(--color-accent-rgb) / 16%);
   --color-border: rgb(250 247 242 / 12%);
   --color-border-strong: rgb(250 247 242 / 22%);
   --color-danger: #ff8d93;
@@ -22,7 +23,7 @@
   --space-4: 1rem;
   --space-5: 1.35rem;
   --shadow-soft: 0 12px 32px rgb(0 0 0 / 16%);
-  --focus-ring: 0 0 0 3px rgb(91 95 242 / 30%);
+  --focus-ring: 0 0 0 3px rgb(var(--color-accent-rgb) / 30%);
   font-family:
     Inter,
     Manrope,
@@ -1145,23 +1146,6 @@ fieldset {
   background: #eef2f0;
 }
 
-.quick-mode-selector label {
-  padding: 0.55rem 0.8rem;
-  border-radius: 999px;
-  font-weight: 750;
-  cursor: pointer;
-}
-
-.quick-mode-selector label:has(input:checked) {
-  background: #14211d;
-  color: #fff;
-}
-
-.quick-mode-selector input {
-  position: absolute;
-  opacity: 0;
-}
-
 .quick-team-list {
   display: grid;
   gap: 1rem;
@@ -1348,10 +1332,6 @@ fieldset {
   .quick-mode-selector {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .quick-mode-selector label {
-    text-align: center;
   }
 
   .wake-lock-warning {
@@ -1668,26 +1648,6 @@ input::placeholder {
   background: #14171c;
 }
 
-.quick-mode-selector label {
-  min-width: 5.1rem;
-  border-radius: calc(var(--radius-sm) - 0.1rem);
-  padding: 0.48rem 0.7rem;
-  color: var(--color-text-muted);
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.055em;
-  text-align: center;
-}
-
-.quick-mode-selector label:has(input:checked) {
-  color: #fff;
-  background: var(--color-accent);
-}
-
-.quick-mode-selector label:has(input:focus-visible) {
-  box-shadow: var(--focus-ring);
-}
-
 .quick-team-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1915,7 +1875,7 @@ input::placeholder {
 .setup-start-match {
   min-height: 3rem;
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 22px rgb(91 95 242 / 18%);
+  box-shadow: 0 8px 22px rgb(var(--color-accent-rgb) / 18%);
 }
 
 .initial-server {
@@ -2277,11 +2237,6 @@ input::placeholder {
     grid-template-columns: none;
   }
 
-  .quick-mode-selector label {
-    min-width: 4.65rem;
-    padding-inline: 0.45rem;
-  }
-
   .quick-team-list {
     grid-template-columns: 1fr;
     gap: 0.55rem;
@@ -2383,11 +2338,6 @@ input::placeholder {
   .quick-setup-header h2 {
     max-width: 7.5rem;
     font-size: 1.15rem;
-  }
-
-  .quick-mode-selector label {
-    min-width: 4.1rem;
-    font-size: 0.68rem;
   }
 
   .player-slot {
@@ -2522,8 +2472,8 @@ body:has(.app-shell--match) {
   color: var(--color-accent);
   background: transparent;
   box-shadow:
-    0 0 0 2px rgb(91 95 242 / 22%),
-    0 0 14px rgb(91 95 242 / 44%);
+    0 0 0 2px rgb(var(--color-accent-rgb) / 22%),
+    0 0 14px rgb(var(--color-accent-rgb) / 44%);
 }
 
 .app-shell--match .server-indicator {
@@ -3041,13 +2991,13 @@ body {
     linear-gradient(
       153deg,
       transparent 0 17%,
-      rgb(91 95 242 / 5%) 17.1% 17.35%,
+      rgb(var(--color-accent-rgb) / 5%) 17.1% 17.35%,
       transparent 17.45% 100%
     ),
     linear-gradient(
       27deg,
       transparent 0 88%,
-      rgb(91 95 242 / 4%) 88.1% 88.35%,
+      rgb(var(--color-accent-rgb) / 4%) 88.1% 88.35%,
       transparent 88.45% 100%
     );
   content: '';
@@ -3070,9 +3020,9 @@ body {
 
 .quick-mode-selector {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
   width: 100%;
-  min-height: 3.75rem;
+  min-height: 3.5rem;
   gap: 0;
   border-color: var(--color-border-strong);
   border-radius: 999px;
@@ -3081,24 +3031,42 @@ body {
   background: rgb(20 23 28 / 86%);
 }
 
-.quick-mode-selector label {
-  display: grid;
+.quick-mode-selector button {
+  display: flex;
+  width: 100%;
+  min-height: 3.5rem;
   min-width: 0;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  border: 0;
   border-radius: 999px;
-  padding: 0.85rem 1rem;
+  padding: 0 1rem;
   color: var(--color-text-muted);
+  background: transparent;
   font-size: 1rem;
   font-weight: 620;
   letter-spacing: 0.01em;
+  line-height: 1;
+  text-align: center;
 }
 
-.quick-mode-selector label:has(input:checked) {
+.quick-mode-selector button:hover:not(:disabled) {
+  color: var(--color-text);
+  background: rgb(var(--color-accent-rgb) / 10%);
+}
+
+.quick-mode-selector button[aria-pressed='true'] {
   color: var(--color-text);
   background: var(--color-accent);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 22%),
-    0 6px 22px rgb(91 95 242 / 28%);
+    0 6px 22px rgb(var(--color-accent-rgb) / 28%);
+}
+
+.quick-mode-selector button:focus-visible {
+  z-index: 1;
+  outline: 0;
+  box-shadow: var(--focus-ring);
 }
 
 .quick-team-list {
@@ -3137,7 +3105,7 @@ body {
   background: var(--color-accent);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 24%),
-    0 7px 18px rgb(91 95 242 / 22%);
+    0 7px 18px rgb(var(--color-accent-rgb) / 22%);
 }
 
 .team-avatar svg {
@@ -3320,7 +3288,7 @@ body {
 .command-field input {
   width: 100%;
   min-height: 3.65rem;
-  border-color: rgb(112 116 255 / 58%);
+  border-color: rgb(var(--color-accent-rgb) / 58%);
   border-radius: 0.8rem;
   padding: 0 1rem;
   background: rgb(20 23 28 / 72%);
@@ -3414,7 +3382,7 @@ body {
   background: var(--color-accent);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 22%),
-    0 12px 30px rgb(91 95 242 / 30%);
+    0 12px 30px rgb(var(--color-accent-rgb) / 30%);
   font-size: 1.08rem;
   font-weight: 680;
 }
@@ -3478,11 +3446,6 @@ body {
   .quick-setup-header h2 {
     max-width: none;
     font-size: 1.65rem;
-  }
-
-  .quick-mode-selector label {
-    min-width: 0;
-    font-size: 0.9rem;
   }
 
   .quick-team {
