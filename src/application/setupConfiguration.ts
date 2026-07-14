@@ -58,6 +58,15 @@ export interface SetupDictationResult {
   ambiguousPlayerIds?: readonly PlayerId[]
 }
 
+export type PlayerCommandDictationField = 'teamA.voiceName' | 'teamB.voiceName'
+
+export interface PlayerCommandDictationResult {
+  accepted: boolean
+  configuration: PlayerMatchConfiguration
+  normalizedTranscript: string
+  rejectionReason: string
+}
+
 export type PlayerPlusConfigurationResult =
   | { ok: true; configuration: PlayerPlusMatchConfiguration }
   | { ok: false; reason: string }
@@ -511,6 +520,48 @@ export function applyPlayerPlusDictation(
   return validationError
     ? rejectedDictation(configuration, normalizedTranscript, validationError)
     : acceptedDictation(updated, field, normalizedTranscript)
+}
+
+export function applyPlayerCommandDictation(
+  configuration: PlayerMatchConfiguration,
+  field: PlayerCommandDictationField,
+  transcript: string,
+): PlayerCommandDictationResult {
+  const value = transcript.trim()
+  const normalizedTranscript = normalizeSpeech(transcript)
+  const validationError = validateVoiceName(value)
+  if (validationError) {
+    return {
+      accepted: false,
+      configuration,
+      normalizedTranscript,
+      rejectionReason: validationError,
+    }
+  }
+
+  const teamKey = field === 'teamA.voiceName' ? 'teamA' : 'teamB'
+  const otherTeamKey = teamKey === 'teamA' ? 'teamB' : 'teamA'
+  if (
+    normalizedTranscript ===
+    normalizeSpeech(configuration[otherTeamKey].voiceName)
+  ) {
+    return {
+      accepted: false,
+      configuration,
+      normalizedTranscript,
+      rejectionReason: 'Les consignes vocales doivent être différentes.',
+    }
+  }
+
+  return {
+    accepted: true,
+    configuration: {
+      ...configuration,
+      [teamKey]: { ...configuration[teamKey], voiceName: value },
+    },
+    normalizedTranscript,
+    rejectionReason: '',
+  }
 }
 
 function validatePlayerPlusField(

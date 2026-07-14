@@ -12,6 +12,7 @@ const callbacks = {
   onConfigurationChange: () => undefined,
   onPlayerPlusConfigurationChange: () => undefined,
   onDictate: () => undefined,
+  onCancelDictation: () => undefined,
   onStartPlayerMatch: () => undefined,
   onStartPlayerPlusMatch: () => undefined,
 }
@@ -60,6 +61,8 @@ describe('MatchSetup', () => {
     expect(html).toContain('value="Perdu"')
     expect(html).toContain('Configuration prête')
     expect(html).toContain('Démarrer le match')
+    expect(html).toContain('Dicter la commande de l’équipe 1')
+    expect(html).toContain('Dicter la commande de l’équipe 2')
     expect(html).not.toContain('Qui sert')
   })
 
@@ -71,8 +74,31 @@ describe('MatchSetup', () => {
     expect(html.match(/pour un échange/g)).toHaveLength(4)
     expect(html).toContain('Inverser gauche et droite')
     expect(html.match(/aria-label="Dicter le prénom/g)).toHaveLength(4)
+    expect(html.match(/aria-label="Dicter la commande/g)).toHaveLength(2)
     expect(html).not.toContain('Premier serveur')
     expect(html).not.toContain(' / ')
+  })
+
+  it('rend visible et annulable la dictée ciblée d’une commande', () => {
+    const html = renderToStaticMarkup(
+      <MatchSetup
+        {...callbacks}
+        message=""
+        mode="PLAYER"
+        configuration={createDefaultMatchConfiguration()}
+        playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
+        microphoneStatus="listening"
+        dictationField="teamA.voiceName"
+      />,
+    )
+
+    expect(html).toContain(
+      'aria-label="Annuler la dictée de la commande de l’équipe 1"',
+    )
+    expect(html).toContain('aria-pressed="true"')
+    expect(html).toMatch(
+      /<button[^>]*disabled=""[^>]*aria-label="Dicter la commande de l’équipe 2"/,
+    )
   })
 
   it('active PLAYER+ lorsque les quatre joueurs et commandes sont valides', () => {

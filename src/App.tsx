@@ -17,6 +17,7 @@ import type { ScreenWakeLockSnapshot } from './application/ScreenWakeLockManager
 import { WakeLockWarning } from './ui/WakeLockWarning'
 import { browserListeningStrategyStore } from './voice/ListeningStrategy'
 import {
+  applyPlayerCommandDictation,
   applyPlayerPlusDictation,
   copyPlayerPlusConfigurationDraft,
   createPlayerPlusConfigurationDraft,
@@ -25,6 +26,7 @@ import {
   toPlayerMatchConfiguration,
   toPlayerPlusMatchConfiguration,
   type PlayerPlusConfigurationDraft,
+  type PlayerCommandDictationField,
   type SetupDictationField,
   type SetupDictationTrace,
   type SetupMode,
@@ -105,6 +107,7 @@ export default function App() {
   const [initialServerListening, setInitialServerListening] = useState(false)
   const [initialServerMessage, setInitialServerMessage] = useState('')
   const initialServerCandidates = useRef<readonly PlayerId[]>([])
+  const resumeControllerListeningAfterSetupDictation = useRef(false)
   const resumeControllerListeningAfterCommandEdit = useRef(false)
   const [wakeLockManager, setWakeLockManager] =
     useState<ScreenWakeLockManager | null>(null)
@@ -369,7 +372,23 @@ export default function App() {
     window.requestAnimationFrame(() => window.scrollTo({ top: 0 }))
   }
 
-  const dictatePlayerPlusField = (field: SetupDictationField) => {
+  const finishSetupDictation = (attemptId: number) => {
+    if (activeDictationAttempt.current !== attemptId) return
+    activeDictationAttempt.current = null
+    activeDictationField.current = null
+    setDictationField(null)
+    if (resumeControllerListeningAfterSetupDictation.current) {
+      resumeControllerListeningAfterSetupDictation.current = false
+      controller.enableListening()
+    }
+  }
+
+  const cancelSetupDictation = () => {
+    if (activeDictationField.current === null) return
+    setupDictation?.stop()
+  }
+
+  const dictateSetupField = (field: SetupDictationField) => {
     if (!setupDictation?.isSupported || activeDictationField.current !== null) {
       setSetupMessage(
         setupDictation?.isSupported
@@ -384,24 +403,31 @@ export default function App() {
     const attemptId = ++dictationAttemptSequence.current
     activeDictationAttempt.current = attemptId
     activeDictationReceived.current = false
+    resumeControllerListeningAfterSetupDictation.current =
+      snapshot.conversation.isRunning
+    if (resumeControllerListeningAfterSetupDictation.current) {
+      controller.disableListening()
+    }
     setDictationField(field)
     setSetupMessage('')
     const draftBefore = copyPlayerPlusConfigurationDraft(
       playerPlusConfigurationRef.current,
     )
     const stepBefore = getNextMissingSetupField(draftBefore)
-    setSetupDictationTrace({
-      at: Date.now(),
-      attemptId,
-      targetedField: field,
-      stepBefore,
-      draftBefore,
-      rawTranscript: '',
-      normalizedTranscript: '',
-      modifiedField: null,
-      rejectionReason: 'En attente de transcription.',
-      stepAfter: stepBefore,
-    })
+    if (setupMode === 'PLAYERS_PLUS') {
+      setSetupDictationTrace({
+        at: Date.now(),
+        attemptId,
+        targetedField: field,
+        stepBefore,
+        draftBefore,
+        rawTranscript: '',
+        normalizedTranscript: '',
+        modifiedField: null,
+        rejectionReason: 'En attente de transcription.',
+        stepAfter: stepBefore,
+      })
+    }
 
     setupDictation.start({
       onStart: () => undefined,
@@ -409,6 +435,19 @@ export default function App() {
       onResult: ({ transcript }) => {
         if (activeDictationAttempt.current !== attemptId) return
         activeDictationReceived.current = true
+        if (setupMode === 'PLAYER') {
+          const result = applyPlayerCommandDictation(
+            controller.getSnapshot().editingConfiguration,
+            field as PlayerCommandDictationField,
+            transcript,
+          )
+          if (result.accepted) {
+            controller.updateEditingConfiguration(result.configuration)
+          }
+          setSetupMessage(result.rejectionReason)
+          setupDictation.stop()
+          return
+        }
         const result = applyPlayerPlusDictation(
           playerPlusConfigurationRef.current,
           field,
@@ -441,9 +480,7 @@ export default function App() {
             ? { ...current, rejectionReason: message }
             : current,
         )
-        activeDictationAttempt.current = null
-        activeDictationField.current = null
-        setDictationField(null)
+        finishSetupDictation(attemptId)
       },
       onEnd: () => {
         if (activeDictationAttempt.current !== attemptId) return
@@ -458,9 +495,7 @@ export default function App() {
               : current,
           )
         }
-        activeDictationAttempt.current = null
-        activeDictationField.current = null
-        setDictationField(null)
+        finishSetupDictation(attemptId)
       },
     })
   }
@@ -713,7 +748,7 @@ export default function App() {
             />
           ) : (
             <MatchSetup
-              message={setupMessage || snapshot.message}
+              message={setupMessage || (dictationField ? '' : snapshot.message)}
               mode={setupMode}
               configuration={snapshot.editingConfiguration}
               playerPlusConfiguration={playerPlusConfiguration}
@@ -726,7 +761,8 @@ export default function App() {
                 controller.updateEditingConfiguration(configuration)
               }
               onPlayerPlusConfigurationChange={updatePlayerPlusConfiguration}
-              onDictate={dictatePlayerPlusField}
+              onDictate={dictateSetupField}
+              onCancelDictation={cancelSetupDictation}
               onStartPlayerMatch={startPlayerMatch}
               onStartPlayerPlusMatch={startPlayerPlusMatch}
             />

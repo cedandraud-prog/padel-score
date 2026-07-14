@@ -48,6 +48,8 @@ describe('MatchRepository', () => {
     const repository = new InMemoryMatchRepository()
     const player = createDefaultMatchConfiguration()
     const playerPlus = createPlayerPlusConfigurationDraft()
+    player.teamA.voiceName = 'Rouge'
+    playerPlus.teamB.voiceName = 'Bleu'
     playerPlus.teamA.players[0].name = 'Alice'
 
     await repository.saveSetupDraft({
@@ -61,6 +63,10 @@ describe('MatchRepository', () => {
 
     const loaded = await repository.getSetupDraft()
     expect(loaded?.mode).toBe('PLAYERS_PLUS')
+    expect(loaded?.player.teamA.voiceName).toBe('Rouge')
+    expect(loaded?.player.teamB.voiceName).toBe('Perdu')
+    expect(loaded?.playerPlus.teamA.voiceName).toBe('Gagné')
+    expect(loaded?.playerPlus.teamB.voiceName).toBe('Bleu')
     expect(loaded?.playerPlus.teamA.players[0].name).toBe('Alice')
     await repository.deleteSetupDraft()
     expect(await repository.getSetupDraft()).toBeNull()

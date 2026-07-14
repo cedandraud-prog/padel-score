@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultMatchConfiguration } from './matchConfiguration'
 import {
+  applyPlayerCommandDictation,
   applyPlayerPlusDictation,
   createPlayerPlusConfigurationDraft,
   getNextMissingSetupField,
@@ -87,6 +88,78 @@ describe('configuration commune PLAYER / PLAYER+', () => {
     expect(updated.accepted).toBe(true)
     expect(updated.draft.teamA.players[0].name).toBe('Alice')
     expect(updated.modifiedField).toBe('teamA.player1')
+  })
+
+  it('dicte séparément chaque commande PLAYER après normalisation', () => {
+    const configuration = createDefaultMatchConfiguration()
+    const teamA = applyPlayerCommandDictation(
+      configuration,
+      'teamA.voiceName',
+      '  Rouge  ',
+    )
+    const teamB = applyPlayerCommandDictation(
+      teamA.configuration,
+      'teamB.voiceName',
+      'Bleu',
+    )
+
+    expect(teamA).toMatchObject({
+      accepted: true,
+      normalizedTranscript: 'rouge',
+      configuration: { teamA: { voiceName: 'Rouge' } },
+    })
+    expect(teamB).toMatchObject({
+      accepted: true,
+      configuration: { teamB: { voiceName: 'Bleu' } },
+    })
+  })
+
+  it('refuse une commande PLAYER en conflit sans modifier le brouillon', () => {
+    const configuration = createDefaultMatchConfiguration()
+    const result = applyPlayerCommandDictation(
+      configuration,
+      'teamB.voiceName',
+      'gagné',
+    )
+
+    expect(result).toMatchObject({
+      accepted: false,
+      configuration,
+      rejectionReason: 'Les consignes vocales doivent être différentes.',
+    })
+    expect(configuration.teamB.voiceName).toBe('Perdu')
+  })
+
+  it('applique une dictée ciblée à une commande PLAYER+ uniquement', () => {
+    const configuration = createPlayerPlusConfigurationDraft()
+    const result = applyPlayerPlusDictation(
+      configuration,
+      'teamA.voiceName',
+      'Rouge',
+    )
+
+    expect(result).toMatchObject({
+      accepted: true,
+      draft: {
+        teamA: { voiceName: 'Rouge' },
+        teamB: { voiceName: 'Perdu' },
+      },
+    })
+  })
+
+  it('refuse une commande PLAYER+ en conflit sans effacer la valeur', () => {
+    const configuration = createPlayerPlusConfigurationDraft()
+    const result = applyPlayerPlusDictation(
+      configuration,
+      'teamB.voiceName',
+      'gagner',
+    )
+
+    expect(result.accepted).toBe(false)
+    expect(result.draft.teamB.voiceName).toBe('Perdu')
+    expect(result.rejectionReason).toBe(
+      'Les consignes vocales doivent être différentes.',
+    )
   })
 
   it('sélectionne le serveur uniquement par correspondance vocale exacte', () => {

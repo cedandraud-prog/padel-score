@@ -1,4 +1,4 @@
-const CACHE_NAME = 'padel-score-shell-v1'
+const CACHE_NAME = 'padel-score-shell-v2'
 const APP_SHELL = [
   '/',
   '/index.html',

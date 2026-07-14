@@ -39,6 +39,7 @@ interface MatchSetupProps {
     configuration: PlayerPlusConfigurationDraft,
   ): void
   onDictate(field: SetupDictationField): void
+  onCancelDictation(): void
   onStartPlayerMatch(feedbackMode: FeedbackMode): void
   onStartPlayerPlusMatch(feedbackMode: FeedbackMode): void
 }
@@ -56,6 +57,7 @@ export function MatchSetup({
   onConfigurationChange,
   onPlayerPlusConfigurationChange,
   onDictate,
+  onCancelDictation,
   onStartPlayerMatch,
   onStartPlayerPlusMatch,
 }: MatchSetupProps) {
@@ -70,6 +72,45 @@ export function MatchSetup({
     mode === 'PLAYER'
       ? validatePlayerSetup(configuration)
       : validatePlayerPlusSetup(playerPlusConfiguration)
+
+  const commandField = (
+    teamKey: TeamKey,
+    teamNumber: number,
+    value: string,
+    onChange: (value: string) => void,
+  ) => {
+    const field = `${teamKey}.voiceName` as SetupDictationField
+    const isListening = dictationField === field
+    const inputId = `${mode.toLowerCase()}-${teamKey}-voice-name`
+    return (
+      <div className="command-field command-field--compact">
+        <label htmlFor={inputId}>Commande</label>
+        <div className="command-input-shell">
+          <input
+            id={inputId}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <button
+            className={`field-action field-action--microphone${isListening ? ' field-action--active' : ''}`}
+            type="button"
+            disabled={dictationField !== null && !isListening}
+            onClick={() =>
+              isListening ? onCancelDictation() : onDictate(field)
+            }
+            aria-label={
+              isListening
+                ? `Annuler la dictée de la commande de l’équipe ${teamNumber}`
+                : `Dicter la commande de l’équipe ${teamNumber}`
+            }
+            aria-pressed={isListening}
+          >
+            <MicrophoneIcon />
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const updatePlayerTeam = (
     teamKey: TeamKey,
@@ -176,19 +217,9 @@ export function MatchSetup({
                       />
                     </label>
                   )}
-                  <label className="command-field">
-                    <span>Commande de point</span>
-                    <input
-                      value={team.voiceName}
-                      onChange={(event) =>
-                        updatePlayerTeam(
-                          teamKey,
-                          'voiceName',
-                          event.target.value,
-                        )
-                      }
-                    />
-                  </label>
+                  {commandField(teamKey, index + 1, team.voiceName, (value) =>
+                    updatePlayerTeam(teamKey, 'voiceName', value),
+                  )}
                 </article>
               )
             })
@@ -285,21 +316,16 @@ export function MatchSetup({
                       })}
                     </div>
                     <div className="quick-team-tools">
-                      <label className="command-field command-field--compact">
-                        <span>Commande</span>
-                        <input
-                          value={team.voiceName}
-                          onChange={(event) =>
-                            onPlayerPlusConfigurationChange({
-                              ...playerPlusConfiguration,
-                              [teamKey]: {
-                                ...team,
-                                voiceName: event.target.value,
-                              },
-                            })
-                          }
-                        />
-                      </label>
+                      {commandField(
+                        teamKey,
+                        teamIndex + 1,
+                        team.voiceName,
+                        (value) =>
+                          onPlayerPlusConfigurationChange({
+                            ...playerPlusConfiguration,
+                            [teamKey]: { ...team, voiceName: value },
+                          }),
+                      )}
                     </div>
                   </article>
                   <div
