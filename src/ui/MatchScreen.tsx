@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import type { MatchControllerSnapshot } from '../application/MatchController'
 import type { TeamId } from '../core/matchTypes'
 import type { PlayerId } from '../core/playerPlusService'
 import { EditableDisplayName } from './EditableDisplayName'
+import { PencilIcon } from './Icons'
 
 interface MatchScreenProps {
   snapshot: MatchControllerSnapshot
@@ -170,7 +172,7 @@ export function MatchScreen({
                 }
                 aria-pressed={team.isServing}
               >
-                <span aria-hidden="true">●</span>
+                <span className="server-indicator" aria-hidden="true" />
               </button>
               <div className="team-label">
                 <EditableDisplayName
@@ -220,7 +222,7 @@ export function MatchScreen({
                         {team.id === 'A'
                           ? snapshot.configuration.teamA.voiceName
                           : snapshot.configuration.teamB.voiceName}{' '}
-                        <span aria-hidden="true">✎</span>
+                        <PencilIcon className="inline-icon" />
                       </button>
                     )}
                   </div>
@@ -293,7 +295,7 @@ export function MatchScreen({
 
       <section className="status-panel" aria-live="polite">
         <p className={microphoneClass}>
-          <span aria-hidden="true">●</span>{' '}
+          <span className="status-indicator" aria-hidden="true" />{' '}
           {snapshot.microphoneStatus === 'listening'
             ? 'Microphone en écoute'
             : snapshot.microphoneStatus === 'starting'
@@ -329,6 +331,7 @@ export function MatchScreen({
 
       <section className="controls" aria-label="Commandes de secours">
         <button
+          className="control-point"
           type="button"
           onClick={() => onPoint('A')}
           disabled={snapshot.phase !== 'match'}
@@ -336,35 +339,49 @@ export function MatchScreen({
           Point équipe A
         </button>
         {snapshot.session.state === 'IN_PROGRESS' && (
-          <button type="button" onClick={onChangeTeams}>
+          <button
+            className="control-secondary"
+            type="button"
+            onClick={onChangeTeams}
+          >
             Changer les équipes
           </button>
         )}
         <button
+          className="control-point"
           type="button"
           onClick={() => onPoint('B')}
           disabled={snapshot.phase !== 'match'}
         >
           Point équipe B
         </button>
-        <button type="button" onClick={onUndo}>
+        <button className="control-action" type="button" onClick={onUndo}>
           Annuler
         </button>
-        <button type="button" onClick={onScore}>
+        <button className="control-action" type="button" onClick={onScore}>
           Score
         </button>
-        <button type="button" onClick={onFullScore}>
+        <button
+          className="control-secondary"
+          type="button"
+          onClick={onFullScore}
+        >
           Score complet
         </button>
-        <button type="button" onClick={onCorrect}>
+        <button className="control-action" type="button" onClick={onCorrect}>
           Corriger
         </button>
         {isPlayerPlus && (
-          <button type="button" onClick={onRequestPlayerServerCorrection}>
+          <button
+            className="control-secondary"
+            type="button"
+            onClick={onRequestPlayerServerCorrection}
+          >
             Serveur
           </button>
         )}
         <button
+          className={`control-listening${listening ? ' control-listening--active' : ''}`}
           type="button"
           onClick={onToggleListening}
           disabled={!snapshot.recognitionAvailable}
@@ -380,4 +397,3 @@ export function MatchScreen({
     </>
   )
 }
-import { useState } from 'react'

@@ -34,8 +34,9 @@ describe('MatchSetup', () => {
   it('affiche une configuration PLAYER directe avec les valeurs par défaut', () => {
     const html = render()
 
-    expect(html).toContain('value="Équipe 1"')
-    expect(html).toContain('value="Équipe 2"')
+    expect(html).toContain('<h3>Équipe 1</h3>')
+    expect(html).toContain('<h3>Équipe 2</h3>')
+    expect(html).toContain('aria-label="Renommer Équipe 1"')
     expect(html).toContain('value="Gagné"')
     expect(html).toContain('value="Perdu"')
     expect(html).toContain('Configuration prête')
@@ -48,9 +49,9 @@ describe('MatchSetup', () => {
 
     expect(html).toContain('GAUCHE')
     expect(html).toContain('DROITE')
-    expect(html.match(/Échanger/g)).toHaveLength(4)
+    expect(html.match(/pour un échange/g)).toHaveLength(4)
     expect(html).toContain('Inverser gauche et droite')
-    expect(html.match(/>Micro</g)).toHaveLength(4)
+    expect(html.match(/aria-label="Dicter le prénom/g)).toHaveLength(4)
     expect(html).not.toContain('Premier serveur')
     expect(html).not.toContain(' / ')
   })

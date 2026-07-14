@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { PencilIcon } from './Icons'
 
 interface EditableDisplayNameProps {
   value: string
@@ -38,7 +39,7 @@ export function EditableDisplayName({
         disabled={disabled}
       >
         <span>{value}</span>
-        {!disabled && <span aria-hidden="true">✎</span>}
+        {!disabled && <PencilIcon className="inline-icon" />}
       </button>
     )
   }

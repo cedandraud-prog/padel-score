@@ -3,6 +3,7 @@ import type { PlayerPlusConfigurationDraft } from '../application/setupConfigura
 import type { TeamId } from '../core/matchTypes'
 import type { PlayerId } from '../core/playerPlusService'
 import { normalizeSpeech } from '../voice/normalizeSpeech'
+import { MicrophoneIcon } from './Icons'
 
 interface InitialServerSelectionProps {
   mode: 'PLAYER' | 'PLAYERS_PLUS'
@@ -44,7 +45,11 @@ export function InitialServerSelection({
   )
 
   return (
-    <section className="initial-server" aria-labelledby="initial-server-title">
+    <section
+      className="initial-server court-surface"
+      aria-labelledby="initial-server-title"
+    >
+      <p className="eyebrow">Dernière étape</p>
       <h2 id="initial-server-title">
         {mode === 'PLAYER'
           ? 'Quelle équipe sert en premier ?'
@@ -95,11 +100,17 @@ export function InitialServerSelection({
           })}
         </div>
       )}
-      <button type="button" disabled={listening} onClick={onListen}>
+      <button
+        className={`voice-choice${listening ? ' voice-choice--active' : ''}`}
+        type="button"
+        disabled={listening}
+        onClick={onListen}
+      >
+        <MicrophoneIcon />
         {listening ? 'Écoute en cours…' : 'Répondre à la voix'}
       </button>
       {message && <p className="error">{message}</p>}
-      <button type="button" onClick={onCancel}>
+      <button className="text-action" type="button" onClick={onCancel}>
         Retour à la configuration
       </button>
     </section>
