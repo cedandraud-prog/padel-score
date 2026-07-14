@@ -1,4 +1,9 @@
 import type { TeamId } from '../core/matchTypes'
+import {
+  validatePlayerParticipants,
+  type PlayerId,
+  type PlayerParticipant,
+} from '../core/playerPlusService'
 import { ALL_COMMAND_ALIASES } from '../voice/commandAliases'
 import { normalizeSpeech } from '../voice/normalizeSpeech'
 
@@ -7,11 +12,31 @@ export interface ConfiguredTeam {
   voiceName: string
 }
 
-export interface MatchConfiguration {
+export interface PlayerMatchConfiguration {
+  mode: 'PLAYER'
   teamA: ConfiguredTeam
   teamB: ConfiguredTeam
   servingTeam: TeamId
 }
+
+export interface PlayerPlusMatchConfiguration {
+  mode: 'PLAYERS_PLUS'
+  teamA: ConfiguredTeam
+  teamB: ConfiguredTeam
+  participants: readonly PlayerParticipant[]
+  firstServer: PlayerId
+}
+
+export type MatchConfiguration =
+  PlayerMatchConfiguration | PlayerPlusMatchConfiguration
+
+export type LegacyPlayerMatchConfiguration = Omit<
+  PlayerMatchConfiguration,
+  'mode'
+> & { mode?: 'PLAYER' }
+
+export type MatchConfigurationInput =
+  MatchConfiguration | LegacyPlayerMatchConfiguration
 
 const SETUP_COMMANDS = ['demarrer', 'recommencer'] as const
 const RESERVED_VOICE_NAMES = new Set([
@@ -20,8 +45,9 @@ const RESERVED_VOICE_NAMES = new Set([
 ])
 const MAX_VOICE_NAME_WORDS = 3
 
-export function createDefaultMatchConfiguration(): MatchConfiguration {
+export function createDefaultMatchConfiguration(): PlayerMatchConfiguration {
   return {
+    mode: 'PLAYER',
     teamA: { displayName: 'Équipe A', voiceName: '' },
     teamB: { displayName: 'Équipe B', voiceName: '' },
     servingTeam: 'A',
@@ -45,7 +71,7 @@ export function validateVoiceName(value: string): string | null {
 }
 
 export function validateMatchConfiguration(
-  configuration: MatchConfiguration,
+  configuration: MatchConfigurationInput,
 ): string | null {
   const displayErrorA = validateDisplayName(configuration.teamA.displayName)
   if (displayErrorA) return displayErrorA
@@ -61,15 +87,56 @@ export function validateMatchConfiguration(
   ) {
     return 'Les consignes vocales doivent être différentes.'
   }
+
+  if (configuration.mode === 'PLAYERS_PLUS') {
+    const participantError = validatePlayerParticipants(
+      configuration.participants,
+    )
+    if (participantError) return participantError
+    if (
+      !configuration.participants.some(
+        ({ id }) => id === configuration.firstServer,
+      )
+    ) {
+      return 'Le premier serveur doit appartenir aux participants du match.'
+    }
+  }
   return null
 }
 
-export function copyMatchConfiguration(
-  configuration: MatchConfiguration,
+export function canonicalizeMatchConfiguration(
+  configuration: MatchConfigurationInput,
 ): MatchConfiguration {
+  if (configuration.mode === 'PLAYERS_PLUS') {
+    return {
+      mode: 'PLAYERS_PLUS',
+      teamA: { ...configuration.teamA },
+      teamB: { ...configuration.teamB },
+      participants: configuration.participants.map((participant) => ({
+        ...participant,
+      })),
+      firstServer: configuration.firstServer,
+    }
+  }
   return {
+    mode: 'PLAYER',
     teamA: { ...configuration.teamA },
     teamB: { ...configuration.teamB },
     servingTeam: configuration.servingTeam,
   }
+}
+
+export function copyMatchConfiguration(
+  configuration: PlayerMatchConfiguration,
+): PlayerMatchConfiguration
+export function copyMatchConfiguration(
+  configuration: PlayerPlusMatchConfiguration,
+): PlayerPlusMatchConfiguration
+export function copyMatchConfiguration(
+  configuration: MatchConfiguration,
+): MatchConfiguration
+export function copyMatchConfiguration(
+  configuration: MatchConfigurationInput,
+): MatchConfiguration {
+  return canonicalizeMatchConfiguration(configuration)
 }

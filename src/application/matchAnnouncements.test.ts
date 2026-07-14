@@ -153,4 +153,22 @@ describe('matchAnnouncements', () => {
       buildTransitionAnnouncement(previous, capture(engine), 'A'),
     ).toContain('victoire des Lynx')
   })
+
+  it('annonce le joueur au service dans le score complet PLAYER+', () => {
+    const engine = new ScoreEngine({
+      playerPlus: {
+        firstServer: 'A1',
+        participants: [
+          { id: 'A1', teamId: 'A', name: 'Alice', side: 'RIGHT' },
+          { id: 'A2', teamId: 'A', name: 'Chloé', side: 'LEFT' },
+          { id: 'B1', teamId: 'B', name: 'Paul', side: 'RIGHT' },
+          { id: 'B2', teamId: 'B', name: 'Marc', side: 'LEFT' },
+        ],
+      },
+    })
+
+    expect(buildFullScoreAnnouncement(capture(engine))).toContain(
+      'Prochain service : Alice',
+    )
+  })
 })

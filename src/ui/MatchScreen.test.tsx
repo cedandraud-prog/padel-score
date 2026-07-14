@@ -148,4 +148,49 @@ describe('MatchScreen', () => {
     expect(html).toContain('Préparation du microphone')
     expect(html).not.toContain('Microphone en écoute')
   })
+
+  it('affiche le serveur individuel et une sélection non ambiguë par côté', () => {
+    const html = renderToStaticMarkup(
+      <MatchScreen
+        snapshot={{
+          ...snapshot,
+          phase: 'player-server-selection',
+          configuration: {
+            mode: 'PLAYERS_PLUS',
+            teamA: snapshot.configuration!.teamA,
+            teamB: snapshot.configuration!.teamB,
+            firstServer: 'A1',
+            participants: [],
+          },
+          currentPlayerServer: null,
+          playerServerSelection: {
+            purpose: 'SECOND_SERVER',
+            teamId: 'B',
+            teamName: 'Invincibles',
+            awaitingSide: true,
+            choices: [
+              { id: 'B1', name: 'Camille', side: 'RIGHT' },
+              { id: 'B2', name: 'Camille', side: 'LEFT' },
+            ],
+          },
+        }}
+        onPoint={() => undefined}
+        onUndo={() => undefined}
+        onScore={() => undefined}
+        onFullScore={() => undefined}
+        onCorrect={() => undefined}
+        onToggleListening={() => undefined}
+        onNewMatch={() => undefined}
+        onDisplayNameChange={() => undefined}
+        onServingTeamChange={() => undefined}
+      />,
+    )
+
+    expect(html).toContain('Qui sert pour Invincibles ?')
+    expect(html).toContain('Camille<small> — droite</small>')
+    expect(html).toContain('Camille<small> — gauche</small>')
+    expect(html).toContain(
+      'Prochain service <strong>Sélection requise</strong>',
+    )
+  })
 })

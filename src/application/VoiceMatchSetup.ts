@@ -4,7 +4,7 @@ import { matchesControlledResponse } from '../voice/controlledResponseAliases'
 import {
   copyMatchConfiguration,
   createDefaultMatchConfiguration,
-  type MatchConfiguration,
+  type PlayerMatchConfiguration,
   validateDisplayName,
   validateVoiceName,
 } from './matchConfiguration'
@@ -32,13 +32,13 @@ export interface VoiceMatchSetupSnapshot {
   step: VoiceSetupStep
   prompt: string
   message: string
-  configuration: MatchConfiguration
+  configuration: PlayerMatchConfiguration
 }
 
 export interface VoiceSetupResult {
   snapshot: VoiceMatchSetupSnapshot
   announcement: string
-  completedConfiguration?: MatchConfiguration
+  completedConfiguration?: PlayerMatchConfiguration
   cancelled?: boolean
 }
 
@@ -62,7 +62,8 @@ export class VoiceMatchSetup {
   private step: VoiceSetupStep = 'idle'
   private prompt = ''
   private message = ''
-  private configuration = createDefaultMatchConfiguration()
+  private configuration: PlayerMatchConfiguration =
+    createDefaultMatchConfiguration()
   private serverRequiresVoiceName = false
 
   start(configuration = createDefaultMatchConfiguration()): VoiceSetupResult {
@@ -77,7 +78,7 @@ export class VoiceMatchSetup {
   }
 
   synchronizeConfiguration(
-    configuration: MatchConfiguration,
+    configuration: PlayerMatchConfiguration,
     editedField?: VoiceSetupEditedField,
   ): void {
     this.configuration = copyMatchConfiguration(configuration)
@@ -262,7 +263,7 @@ export class VoiceMatchSetup {
   private result(
     announcement: string,
     prompt: string,
-    completedConfiguration?: MatchConfiguration,
+    completedConfiguration?: PlayerMatchConfiguration,
     cancelled?: boolean,
   ): VoiceSetupResult {
     this.prompt = prompt

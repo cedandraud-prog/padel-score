@@ -16,6 +16,7 @@ const callbacks = {
   onEditStateChange: () => undefined,
   onRestartConfiguration: () => undefined,
   onStartPlayerMatch: () => undefined,
+  onStartPlayerPlusMatch: () => undefined,
 }
 
 describe('MatchSetup', () => {
@@ -141,10 +142,10 @@ describe('MatchSetup', () => {
     expect(html).toContain('Informations reconnues')
     expect(html).toContain('Positions')
     expect(html).toContain('Premier serveur')
-    expect(html).toContain('Bientôt disponible')
-    expect(html).toContain('La configuration reste déconnectée du moteur.')
+    expect(html).toContain('Démarrer le match')
+    expect(html).toContain('Le premier serveur est obligatoire.')
     expect(html).not.toMatch(/<input(?! type="radio")/)
-    expect(html).not.toContain('Démarrer le match')
+    expect(html).not.toContain('Bientôt disponible')
   })
 
   it('affiche un seul état de réponse vocale PLAYER+', () => {
@@ -217,5 +218,37 @@ describe('MatchSetup', () => {
     expect(html).toContain('Cible : teamB.player2')
     expect(html).toContain('Brut : David')
     expect(html).toContain('normalisé : david')
+  })
+
+  it('active le démarrage PLAYER+ uniquement avec un brouillon valide', () => {
+    const draft = createPlayerPlusConfigurationDraft()
+    draft.teamA.displayName = 'Champions'
+    draft.teamA.voiceName = 'Rouge'
+    draft.teamA.players[0].name = 'Alice'
+    draft.teamA.players[1].name = 'Chloé'
+    draft.teamB.displayName = 'Copains'
+    draft.teamB.voiceName = 'Bleu'
+    draft.teamB.players[0].name = 'Paul'
+    draft.teamB.players[1].name = 'Marc'
+    draft.servingPlayerId = 'A1'
+
+    const html = renderToStaticMarkup(
+      <MatchSetup
+        {...callbacks}
+        message=""
+        mode="PLAYERS_PLUS"
+        configuration={createDefaultMatchConfiguration()}
+        playerPlusConfiguration={draft}
+        voiceSetup={null}
+        microphoneStatus="inactive"
+        dictationField={null}
+      />,
+    )
+
+    const startButton = html.match(
+      /<button class="setup-start-match"[^>]*>Démarrer le match<\/button>/,
+    )?.[0]
+    expect(startButton).toBeDefined()
+    expect(startButton).not.toContain('disabled')
   })
 })

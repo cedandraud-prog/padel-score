@@ -1,13 +1,18 @@
 import {
   createDefaultMatchConfiguration,
+  type PlayerPlusMatchConfiguration,
   validateDisplayName,
   validateMatchConfiguration,
   validateVoiceName,
-  type MatchConfiguration,
+  type PlayerMatchConfiguration,
 } from './matchConfiguration'
 import { normalizeSpeech } from '../voice/normalizeSpeech'
 import { matchesControlledResponse } from '../voice/controlledResponseAliases'
-import type { PlayerId, PlayerSide } from '../core/playerPlusService'
+import type {
+  PlayerId,
+  PlayerParticipant,
+  PlayerSide,
+} from '../core/playerPlusService'
 
 export type SetupMode = 'PLAYER' | 'PLAYERS_PLUS'
 export type { PlayerSide } from '../core/playerPlusService'
@@ -49,7 +54,12 @@ export interface SetupDictationResult {
   modifiedField: SetupDictationField | null
   rejectionReason: string
   nextMissingField: SetupDictationField | null
+  ambiguousPlayerIds?: readonly PlayerId[]
 }
+
+export type PlayerPlusConfigurationResult =
+  | { ok: true; configuration: PlayerPlusMatchConfiguration }
+  | { ok: false; reason: string }
 
 export interface SetupDictationTrace {
   at: number
@@ -132,13 +142,57 @@ export function copyPlayerPlusConfigurationDraft(
 }
 
 export function isPlayerConfigurationReady(
-  configuration: MatchConfiguration,
+  configuration: PlayerMatchConfiguration,
 ): boolean {
   return validateMatchConfiguration(configuration) === null
 }
 
+export function toPlayerPlusMatchConfiguration(
+  draft: PlayerPlusConfigurationDraft,
+): PlayerPlusConfigurationResult {
+  if (!draft.servingPlayerId) {
+    return { ok: false, reason: 'Le premier serveur est obligatoire.' }
+  }
+
+  const participants: PlayerParticipant[] = [
+    ...draft.teamA.players.map((player) => ({
+      ...player,
+      name: player.name.trim(),
+      teamId: 'A' as const,
+    })),
+    ...draft.teamB.players.map((player) => ({
+      ...player,
+      name: player.name.trim(),
+      teamId: 'B' as const,
+    })),
+  ]
+  const configuration: PlayerPlusMatchConfiguration = {
+    mode: 'PLAYERS_PLUS',
+    teamA: {
+      displayName: draft.teamA.displayName.trim(),
+      voiceName: draft.teamA.voiceName.trim(),
+    },
+    teamB: {
+      displayName: draft.teamB.displayName.trim(),
+      voiceName: draft.teamB.voiceName.trim(),
+    },
+    participants,
+    firstServer: draft.servingPlayerId,
+  }
+  const validationError = validateMatchConfiguration(configuration)
+  return validationError
+    ? { ok: false, reason: validationError }
+    : { ok: true, configuration }
+}
+
+export function isPlayerPlusConfigurationReady(
+  draft: PlayerPlusConfigurationDraft,
+): boolean {
+  return toPlayerPlusMatchConfiguration(draft).ok
+}
+
 export function playerConfigurationHasData(
-  configuration: MatchConfiguration,
+  configuration: PlayerMatchConfiguration,
 ): boolean {
   const defaults = createDefaultMatchConfiguration()
   return (
@@ -166,7 +220,7 @@ export function playerPlusConfigurationHasData(
 
 export function setupModeHasData(
   mode: SetupMode,
-  playerConfiguration: MatchConfiguration,
+  playerConfiguration: PlayerMatchConfiguration,
   playerPlusConfiguration: PlayerPlusConfigurationDraft,
 ): boolean {
   return mode === 'PLAYER'
@@ -206,6 +260,7 @@ export function applyPlayerPlusDictation(
   configuration: PlayerPlusConfigurationDraft,
   field: SetupDictationField,
   transcript: string,
+  ambiguousPlayerIds: readonly PlayerId[] = [],
 ): SetupDictationResult {
   const value = transcript.trim()
   const normalizedTranscript = normalizeSpeech(transcript)
@@ -218,19 +273,64 @@ export function applyPlayerPlusDictation(
   }
 
   if (field === 'servingPlayerId') {
-    const player = [
+    const players = [
       ...configuration.teamA.players,
       ...configuration.teamB.players,
-    ].find(({ name }) => normalizeSpeech(name) === normalizedTranscript)
-    if (!player) {
+    ]
+    if (ambiguousPlayerIds.length > 1) {
+      const expectedSide = matchesControlledResponse(
+        normalizedTranscript,
+        'droite',
+      )
+        ? 'RIGHT'
+        : matchesControlledResponse(normalizedTranscript, 'gauche')
+          ? 'LEFT'
+          : null
+      const sideMatches = expectedSide
+        ? players.filter(
+            ({ id, side }) =>
+              ambiguousPlayerIds.includes(id) && side === expectedSide,
+          )
+        : []
+      if (sideMatches.length !== 1) {
+        return {
+          ...rejectedDictation(
+            configuration,
+            normalizedTranscript,
+            'Réponse ambiguë : dites droite ou gauche.',
+          ),
+          ambiguousPlayerIds,
+        }
+      }
+      return acceptedDictation(
+        { ...configuration, servingPlayerId: sideMatches[0].id },
+        field,
+        normalizedTranscript,
+      )
+    }
+
+    const matches = players.filter(
+      ({ name }) => normalizeSpeech(name) === normalizedTranscript,
+    )
+    if (matches.length === 0) {
       return rejectedDictation(
         configuration,
         normalizedTranscript,
         'Le serveur doit correspondre exactement à un joueur renseigné.',
       )
     }
+    if (matches.length > 1) {
+      return {
+        ...rejectedDictation(
+          configuration,
+          normalizedTranscript,
+          'Plusieurs joueurs portent ce nom. Dites droite ou gauche.',
+        ),
+        ambiguousPlayerIds: matches.map(({ id }) => id),
+      }
+    }
     return acceptedDictation(
-      { ...configuration, servingPlayerId: player.id },
+      { ...configuration, servingPlayerId: matches[0].id },
       field,
       normalizedTranscript,
     )

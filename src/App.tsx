@@ -21,12 +21,14 @@ import {
   createPlayerPlusConfigurationDraft,
   getNextMissingSetupField,
   setupModeHasData,
+  toPlayerPlusMatchConfiguration,
   type PlayerPlusConfigurationDraft,
   type SetupDictationField,
   type SetupDictationTrace,
   type SetupMode,
 } from './application/setupConfiguration'
 import type { FeedbackMode } from './voice/speechTypes'
+import type { PlayerId } from './core/playerPlusService'
 
 const strategyStore = browserListeningStrategyStore()
 const diagnosticsEnabled = new URLSearchParams(window.location.search).has(
@@ -54,6 +56,7 @@ export default function App() {
   const dictationAttemptSequence = useRef(0)
   const activeDictationAttempt = useRef<number | null>(null)
   const activeDictationReceived = useRef(false)
+  const ambiguousSetupPlayerIds = useRef<readonly PlayerId[]>([])
   const resumeControllerListeningAfterEdit = useRef(false)
   const [wakeLockManager, setWakeLockManager] =
     useState<ScreenWakeLockManager | null>(null)
@@ -114,6 +117,17 @@ export default function App() {
     }
   }, [snapshot?.experience.active, wakeLockManager])
 
+  useEffect(() => {
+    if (snapshot?.phase !== 'voice-setup' || setupMode !== 'PLAYERS_PLUS') {
+      return
+    }
+    const emptyPlayerPlus = createPlayerPlusConfigurationDraft()
+    playerPlusConfigurationRef.current = emptyPlayerPlus
+    setPlayerPlusConfiguration(emptyPlayerPlus)
+    ambiguousSetupPlayerIds.current = []
+    setSetupMode('PLAYER')
+  }, [snapshot?.phase, setupMode])
+
   if (!controller || !snapshot) return null
 
   const changeSetupMode = (nextMode: SetupMode) => {
@@ -138,6 +152,7 @@ export default function App() {
     activeDictationField.current = null
     setDictationField(null)
     setSetupMessage('')
+    ambiguousSetupPlayerIds.current = []
     const emptyPlayerPlus = createPlayerPlusConfigurationDraft()
     playerPlusConfigurationRef.current = emptyPlayerPlus
     setPlayerPlusConfiguration(emptyPlayerPlus)
@@ -160,6 +175,7 @@ export default function App() {
     }
 
     activeDictationField.current = field
+    if (field !== 'servingPlayerId') ambiguousSetupPlayerIds.current = []
     const attemptId = ++dictationAttemptSequence.current
     activeDictationAttempt.current = attemptId
     activeDictationReceived.current = false
@@ -192,7 +208,9 @@ export default function App() {
           playerPlusConfigurationRef.current,
           field,
           transcript,
+          ambiguousSetupPlayerIds.current,
         )
+        ambiguousSetupPlayerIds.current = result.ambiguousPlayerIds ?? []
         playerPlusConfigurationRef.current = result.draft
         setPlayerPlusConfiguration(result.draft)
         setSetupMessage(result.rejectionReason)
@@ -248,6 +266,7 @@ export default function App() {
     playerPlusConfigurationRef.current = configuration
     setPlayerPlusConfiguration(configuration)
     setSetupMessage('')
+    ambiguousSetupPlayerIds.current = []
   }
 
   const changeSetupEditState = (editing: boolean) => {
@@ -277,6 +296,18 @@ export default function App() {
   const startPlayerMatch = (feedbackMode: FeedbackMode) => {
     controller.startConfiguredMatch({
       configuration: snapshot.editingConfiguration,
+      feedbackMode,
+    })
+  }
+
+  const startPlayerPlusMatch = (feedbackMode: FeedbackMode) => {
+    const result = toPlayerPlusMatchConfiguration(playerPlusConfiguration)
+    if (!result.ok) {
+      setSetupMessage(result.reason)
+      return
+    }
+    controller.startConfiguredMatch({
+      configuration: result.configuration,
       feedbackMode,
     })
   }
@@ -321,6 +352,7 @@ export default function App() {
           onEditStateChange={changeSetupEditState}
           onRestartConfiguration={() => void controller.restartConfiguration()}
           onStartPlayerMatch={startPlayerMatch}
+          onStartPlayerPlusMatch={startPlayerPlusMatch}
         />
       ) : (
         <>
@@ -337,6 +369,15 @@ export default function App() {
               controller.updateDisplayName(team, value)
             }
             onServingTeamChange={(team) => controller.changeServingTeam(team)}
+            onRequestPlayerServerCorrection={() =>
+              void controller.enterServerCorrection()
+            }
+            onSelectPlayerServer={(playerId) =>
+              void controller.selectPlayerServer(playerId)
+            }
+            onCancelPlayerServerSelection={() =>
+              controller.cancelPlayerServerSelection()
+            }
           />
           {snapshot.phase === 'correction' && (
             <CorrectionPanel

@@ -3,11 +3,12 @@ import type { MicrophoneStatus } from '../application/MatchController'
 import {
   validateDisplayName,
   validateVoiceName,
-  type MatchConfiguration,
+  type PlayerMatchConfiguration,
 } from '../application/matchConfiguration'
 import {
   applyPlayerPlusDictation,
   isPlayerConfigurationReady,
+  toPlayerPlusMatchConfiguration,
   SETUP_FIELD_LABELS,
   type PlayerPlusConfigurationDraft,
   type PlayerSide,
@@ -34,7 +35,7 @@ type SetupEditTarget =
 interface MatchSetupProps {
   message: string
   mode: SetupMode
-  configuration: MatchConfiguration
+  configuration: PlayerMatchConfiguration
   playerPlusConfiguration: PlayerPlusConfigurationDraft
   voiceSetup: VoiceMatchSetupSnapshot | null
   microphoneStatus: MicrophoneStatus
@@ -44,7 +45,7 @@ interface MatchSetupProps {
   showDictationDiagnostics: boolean
   onModeChange(mode: SetupMode): void
   onConfigurationChange(
-    configuration: MatchConfiguration,
+    configuration: PlayerMatchConfiguration,
     editedField: VoiceSetupEditedField,
   ): void
   onPlayerPlusConfigurationChange(
@@ -54,6 +55,7 @@ interface MatchSetupProps {
   onEditStateChange(editing: boolean): void
   onRestartConfiguration(): void
   onStartPlayerMatch(feedbackMode: FeedbackMode): void
+  onStartPlayerPlusMatch(feedbackMode: FeedbackMode): void
 }
 
 const microphoneLabels: Record<MicrophoneStatus, string> = {
@@ -150,12 +152,16 @@ export function MatchSetup({
   onEditStateChange,
   onRestartConfiguration,
   onStartPlayerMatch,
+  onStartPlayerPlusMatch,
 }: MatchSetupProps) {
   const [feedbackMode, setFeedbackMode] = useState<FeedbackMode>('BEEP')
   const [editTarget, setEditTarget] = useState<SetupEditTarget | null>(null)
   const [editValue, setEditValue] = useState('')
   const [editError, setEditError] = useState('')
   const playerReady = isPlayerConfigurationReady(configuration)
+  const playerPlusResult = toPlayerPlusMatchConfiguration(
+    playerPlusConfiguration,
+  )
   const voiceStep = voiceSetup?.step ?? 'idle'
   const teamADisplayKnown =
     !['idle', 'team-a-display-name'].includes(voiceStep) ||
@@ -206,7 +212,8 @@ export function MatchSetup({
     if (!editTarget) return
 
     if (editTarget.mode === 'PLAYER') {
-      const nextConfiguration: MatchConfiguration = {
+      const nextConfiguration: PlayerMatchConfiguration = {
+        mode: 'PLAYER',
         teamA: { ...configuration.teamA },
         teamB: { ...configuration.teamB },
         servingTeam: configuration.servingTeam,
@@ -533,10 +540,28 @@ export function MatchSetup({
       ) : (
         <div className="setup-coming-soon" role="status">
           <strong>PLAYER+</strong>
-          <button className="setup-start-match" type="button" disabled>
-            Bientôt disponible
+          <label>
+            Feedback après commande acceptée
+            <select
+              value={feedbackMode}
+              onChange={(event) =>
+                setFeedbackMode(event.target.value as FeedbackMode)
+              }
+            >
+              <option value="BEEP">Bip court</option>
+              <option value="OK">Voix « OK »</option>
+              <option value="NONE">Aucun</option>
+            </select>
+          </label>
+          <button
+            className="setup-start-match"
+            type="button"
+            disabled={!playerPlusResult.ok}
+            onClick={() => onStartPlayerPlusMatch(feedbackMode)}
+          >
+            Démarrer le match
           </button>
-          <small>La configuration reste déconnectée du moteur.</small>
+          {!playerPlusResult.ok && <small>{playerPlusResult.reason}</small>}
         </div>
       )}
 

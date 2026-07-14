@@ -91,6 +91,16 @@ function setsAnnouncement(state: AnnounceableMatchState): string {
 }
 
 function nextServerAnnouncement(state: AnnounceableMatchState): string {
+  const service = state.match.service
+  if (
+    service.mode === 'PLAYERS_PLUS' &&
+    service.stage !== 'AWAITING_SECOND_SERVER'
+  ) {
+    const participant = service.serviceOrder.participants.find(
+      ({ id }) => id === service.currentServer,
+    )
+    if (participant) return `Prochain service : ${participant.name}`
+  }
   const server = (['A', 'B'] as const)
     .map((team) => state.display.teams[team])
     .find((team) => team.isServing)

@@ -11,15 +11,16 @@ import type {
 import { announcementSafetyTimeoutMs, MatchController } from './MatchController'
 import {
   createDefaultMatchConfiguration,
-  type MatchConfiguration,
+  type PlayerMatchConfiguration,
 } from './matchConfiguration'
 
 function matchConfiguration(
   A: string,
   B: string,
   servingTeam: 'A' | 'B' = 'A',
-): MatchConfiguration {
+): PlayerMatchConfiguration {
   return {
+    mode: 'PLAYER',
     teamA: { displayName: A, voiceName: A },
     teamB: { displayName: B, voiceName: B },
     servingTeam,

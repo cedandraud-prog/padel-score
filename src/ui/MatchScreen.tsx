@@ -1,5 +1,6 @@
 import type { MatchControllerSnapshot } from '../application/MatchController'
 import type { TeamId } from '../core/matchTypes'
+import type { PlayerId } from '../core/playerPlusService'
 import { EditableDisplayName } from './EditableDisplayName'
 
 interface MatchScreenProps {
@@ -13,6 +14,9 @@ interface MatchScreenProps {
   onNewMatch(): void
   onDisplayNameChange(team: TeamId, value: string): void
   onServingTeamChange(team: TeamId): void
+  onRequestPlayerServerCorrection?(): void
+  onSelectPlayerServer?(playerId: PlayerId): void
+  onCancelPlayerServerSelection?(): void
 }
 
 export const MATCH_VOICE_COMMAND_HELP = [
@@ -65,11 +69,21 @@ export function MatchScreen({
   onNewMatch,
   onDisplayNameChange,
   onServingTeamChange,
+  onRequestPlayerServerCorrection,
+  onSelectPlayerServer,
+  onCancelPlayerServerSelection,
 }: MatchScreenProps) {
   const { A, B } = snapshot.display.teams
   const listening = snapshot.conversation.isRunning
   const microphoneClass = `microphone microphone--${snapshot.microphoneStatus}`
   const nextServer = A.isServing ? A : B
+  const isPlayerPlus = snapshot.configuration?.mode === 'PLAYERS_PLUS'
+  const playerServerName = snapshot.currentPlayerServer?.name
+  const selection = snapshot.playerServerSelection
+  const duplicateChoiceNames = selection
+    ? new Set(selection.choices.map(({ name }) => name)).size <
+      selection.choices.length
+    : false
   const teamVoiceCommands =
     snapshot.session.state === 'IN_PROGRESS' && snapshot.configuration
       ? [
@@ -111,7 +125,11 @@ export function MatchScreen({
               <button
                 className={`server-control${team.isServing ? ' server-control--active' : ''}`}
                 type="button"
-                onClick={() => onServingTeamChange(team.id)}
+                onClick={() =>
+                  isPlayerPlus
+                    ? onRequestPlayerServerCorrection?.()
+                    : onServingTeamChange(team.id)
+                }
                 disabled={snapshot.session.state !== 'IN_PROGRESS'}
                 aria-label={
                   team.isServing
@@ -148,10 +166,49 @@ export function MatchScreen({
           )}
         {snapshot.session.state === 'IN_PROGRESS' && (
           <p className="next-server">
-            Prochain service <strong>{nextServer.name}</strong>
+            Prochain service{' '}
+            <strong>
+              {selection
+                ? 'Sélection requise'
+                : (playerServerName ?? nextServer.name)}
+            </strong>
           </p>
         )}
       </section>
+
+      {selection && (
+        <section
+          className="player-server-selection"
+          aria-labelledby="player-server-selection-title"
+        >
+          <h2 id="player-server-selection-title">
+            Qui sert pour {selection.teamName} ?
+          </h2>
+          <div>
+            {selection.choices.map((choice) => (
+              <button
+                type="button"
+                className="primary"
+                key={choice.id}
+                onClick={() => onSelectPlayerServer?.(choice.id)}
+              >
+                {choice.name}
+                {duplicateChoiceNames && (
+                  <small>
+                    {' '}
+                    — {choice.side === 'RIGHT' ? 'droite' : 'gauche'}
+                  </small>
+                )}
+              </button>
+            ))}
+          </div>
+          {selection.purpose === 'CORRECTION' && (
+            <button type="button" onClick={onCancelPlayerServerSelection}>
+              Annuler
+            </button>
+          )}
+        </section>
+      )}
 
       <section className="status-panel" aria-live="polite">
         <p className={microphoneClass}>
@@ -190,10 +247,18 @@ export function MatchScreen({
       </details>
 
       <section className="controls" aria-label="Commandes de secours">
-        <button type="button" onClick={() => onPoint('A')}>
+        <button
+          type="button"
+          onClick={() => onPoint('A')}
+          disabled={snapshot.phase !== 'match'}
+        >
           Point équipe A
         </button>
-        <button type="button" onClick={() => onPoint('B')}>
+        <button
+          type="button"
+          onClick={() => onPoint('B')}
+          disabled={snapshot.phase !== 'match'}
+        >
           Point équipe B
         </button>
         <button type="button" onClick={onUndo}>
@@ -208,6 +273,11 @@ export function MatchScreen({
         <button type="button" onClick={onCorrect}>
           Corriger
         </button>
+        {isPlayerPlus && (
+          <button type="button" onClick={onRequestPlayerServerCorrection}>
+            Serveur
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggleListening}

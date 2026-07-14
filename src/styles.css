@@ -881,6 +881,35 @@ fieldset {
   color: #a8f0c6;
 }
 
+.player-server-selection {
+  margin-top: 1rem;
+  border: 2px solid #a8f0c6;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  background: #10251e;
+  text-align: center;
+}
+
+.player-server-selection h2 {
+  margin-bottom: 1rem;
+}
+
+.player-server-selection > div {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.player-server-selection button {
+  min-height: 3.5rem;
+  font-size: 1.1rem;
+}
+
+.player-server-selection small {
+  display: block;
+  font-size: 0.85rem;
+}
+
 .badge {
   top: 3.2rem;
 }

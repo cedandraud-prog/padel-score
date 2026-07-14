@@ -211,6 +211,7 @@ describe('VoiceMatchSetup', () => {
 
     expect(result.snapshot.step).toBe('completed')
     expect(result.completedConfiguration).toEqual({
+      mode: 'PLAYER',
       teamA: { displayName: 'Champions', voiceName: 'Rouge' },
       teamB: { displayName: 'Invincibles', voiceName: 'Bleu' },
       servingTeam: 'B',

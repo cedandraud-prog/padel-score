@@ -1,5 +1,10 @@
 import { ScoreEngine } from '../core/ScoreEngine'
 import type { DisplayState, MatchState, TeamId } from '../core/matchTypes'
+import {
+  type PlayerId,
+  type PlayerParticipant,
+  type PlayerSide,
+} from '../core/playerPlusService'
 import { resolveVoiceCommand } from '../voice/commandAliases'
 import { matchesControlledResponse } from '../voice/controlledResponseAliases'
 import { normalizeSpeech } from '../voice/normalizeSpeech'
@@ -36,8 +41,11 @@ import {
 } from './ConversationEngine'
 import {
   copyMatchConfiguration,
+  canonicalizeMatchConfiguration,
   createDefaultMatchConfiguration,
+  type MatchConfigurationInput,
   type MatchConfiguration,
+  type PlayerMatchConfiguration,
   validateMatchConfiguration,
 } from './matchConfiguration'
 import {
@@ -144,6 +152,7 @@ export type MatchPhase =
   | 'match'
   | 'correction'
   | 'server-correction'
+  | 'player-server-selection'
   | 'session-end-confirmation'
   | 'session-finished'
   | 'finished'
@@ -179,7 +188,9 @@ export interface MatchControllerSnapshot {
   correctionResult: string
   feedbackMode: FeedbackMode
   configuration: MatchConfiguration | null
-  editingConfiguration: MatchConfiguration
+  editingConfiguration: PlayerMatchConfiguration
+  playerServerSelection: PlayerServerSelectionSnapshot | null
+  currentPlayerServer: PlayerServerChoice | null
   voiceSetup: VoiceMatchSetupSnapshot | null
   conversation: ConversationSnapshot
   recognitionAttemptId: number | null
@@ -195,8 +206,29 @@ export interface MatchControllerSnapshot {
 }
 
 export interface StartMatchOptions {
-  configuration: MatchConfiguration
+  configuration: MatchConfigurationInput
   feedbackMode?: FeedbackMode
+}
+
+export interface PlayerServerChoice {
+  id: PlayerId
+  name: string
+  side: PlayerSide
+}
+
+export interface PlayerServerSelectionSnapshot {
+  purpose: 'SECOND_SERVER' | 'CORRECTION'
+  teamId: TeamId
+  teamName: string
+  choices: readonly PlayerServerChoice[]
+  awaitingSide: boolean
+}
+
+interface PlayerServerSelectionState {
+  purpose: PlayerServerSelectionSnapshot['purpose']
+  teamId: TeamId
+  candidateIds: readonly PlayerId[]
+  awaitingSide: boolean
 }
 
 type Listener = (snapshot: MatchControllerSnapshot) => void
@@ -247,6 +279,7 @@ export class MatchController {
   private feedbackMode: FeedbackMode = 'NONE'
   private configuration: MatchConfiguration | null = null
   private editingConfiguration = createDefaultMatchConfiguration()
+  private playerServerSelection: PlayerServerSelectionState | null = null
   private editingRevision = 0
   private readonly voiceSetup = new VoiceMatchSetup()
   private readonly waitingVoiceEntry = new WaitingVoiceEntry()
@@ -324,6 +357,8 @@ export class MatchController {
         ? copyMatchConfiguration(this.configuration)
         : null,
       editingConfiguration: copyMatchConfiguration(this.editingConfiguration),
+      playerServerSelection: this.getPlayerServerSelectionSnapshot(),
+      currentPlayerServer: this.getCurrentPlayerServerSnapshot(),
       voiceSetup: this.voiceSetupSnapshot
         ? {
             ...this.voiceSetupSnapshot,
@@ -403,20 +438,34 @@ export class MatchController {
       return false
     }
 
+    const configuration = canonicalizeMatchConfiguration(options.configuration)
+
     this.resetRecognitionForMatchStart()
     this.engine = new ScoreEngine({
       teamNames: {
-        A: options.configuration.teamA.displayName.trim(),
-        B: options.configuration.teamB.displayName.trim(),
+        A: configuration.teamA.displayName.trim(),
+        B: configuration.teamB.displayName.trim(),
       },
-      servingTeam: options.configuration.servingTeam,
+      servingTeam:
+        configuration.mode === 'PLAYER' ? configuration.servingTeam : undefined,
+      playerPlus:
+        configuration.mode === 'PLAYERS_PLUS'
+          ? {
+              participants: configuration.participants,
+              firstServer: configuration.firstServer,
+            }
+          : undefined,
       format: 'FREE_PLAY',
     })
     this.session.reset()
     this.session.start()
     this.experience.startMatch()
-    this.configuration = copyMatchConfiguration(options.configuration)
-    this.editingConfiguration = copyMatchConfiguration(options.configuration)
+    this.configuration = copyMatchConfiguration(configuration)
+    this.editingConfiguration =
+      configuration.mode === 'PLAYER'
+        ? copyMatchConfiguration(configuration)
+        : createDefaultMatchConfiguration()
+    this.playerServerSelection = null
     this.voiceSetupSnapshot = null
     this.phase = 'match'
     this.lastTranscript = ''
@@ -447,6 +496,10 @@ export class MatchController {
         'Reconnaissance vocale indisponible. Utilisez Google Chrome ou les boutons de secours.'
     }
     this.emit()
+    if (configuration.mode === 'PLAYERS_PLUS') {
+      const server = this.currentPlayerParticipant()
+      if (server) void this.announce(`Service : ${server.name}.`)
+    }
     return true
   }
 
@@ -499,7 +552,7 @@ export class MatchController {
   }
 
   updateEditingConfiguration(
-    configuration: MatchConfiguration,
+    configuration: PlayerMatchConfiguration,
     editedField?: VoiceSetupEditedField,
   ): void {
     if (this.phase !== 'setup' && this.phase !== 'voice-setup') return
@@ -541,6 +594,7 @@ export class MatchController {
 
   changeServingTeam(team: TeamId): boolean {
     if (this.session.getSnapshot().state !== 'IN_PROGRESS') return false
+    if (this.configuration?.mode === 'PLAYERS_PLUS') return false
     if (this.phase === 'server-correction') {
       this.conversation.exitGuidedMode()
       this.phase = 'match'
@@ -694,6 +748,11 @@ export class MatchController {
       return
     }
 
+    if (this.phase === 'player-server-selection') {
+      await this.handlePlayerServerSelection(normalized)
+      return
+    }
+
     if (this.phase === 'session-end-confirmation') {
       await this.handleSessionEndConfirmation(normalized)
       return
@@ -824,6 +883,7 @@ export class MatchController {
   async awardPoint(team: TeamId): Promise<void> {
     if (this.phase !== 'match') return
     const previous = snapshotOf(this.engine)
+    const previousPlayerServer = this.currentPlayerParticipant()?.id ?? null
     this.engine.awardPoint(team)
     this.actionCount += 1
     const next = snapshotOf(this.engine)
@@ -835,6 +895,24 @@ export class MatchController {
         suppressMatchWinner: true,
       }),
     )
+    if (this.isAwaitingSecondPlayerServer()) {
+      await this.enterPlayerServerSelection('SECOND_SERVER')
+      return
+    }
+    const currentPlayerServer = this.currentPlayerParticipant()
+    if (
+      !currentPlayerServer ||
+      currentPlayerServer.id === previousPlayerServer
+    ) {
+      return
+    }
+    if (next.match.completedSets.length > previous.match.completedSets.length) {
+      await this.announce(
+        `Ordre de service conservé. Dites Serveur pour le modifier. Service : ${currentPlayerServer.name}.`,
+      )
+      return
+    }
+    await this.announce(`Service : ${currentPlayerServer.name}.`)
   }
 
   async undo(): Promise<boolean> {
@@ -851,9 +929,17 @@ export class MatchController {
       this.phase = 'match'
       if (this.recognition.isSupported) this.conversation.start()
     }
+    if (this.phase === 'player-server-selection') {
+      this.playerServerSelection = null
+      this.conversation.exitGuidedMode()
+      this.phase = 'match'
+    }
     this.message = 'Dernière action annulée.'
     this.emit()
     await this.announcePointScore()
+    if (this.isAwaitingSecondPlayerServer()) {
+      await this.enterPlayerServerSelection('SECOND_SERVER')
+    }
     return true
   }
 
@@ -886,6 +972,10 @@ export class MatchController {
 
   async enterServerCorrection(): Promise<void> {
     if (this.phase !== 'match') return
+    if (this.configuration?.mode === 'PLAYERS_PLUS') {
+      await this.enterPlayerServerSelection('CORRECTION')
+      return
+    }
     this.conversation.exitGuidedMode()
     this.conversation.enterGuidedMode()
     this.phase = 'server-correction'
@@ -895,6 +985,59 @@ export class MatchController {
     this.message = 'Quelle équipe sert ?'
     this.emit()
     await this.announce('Quelle équipe sert ?', true)
+  }
+
+  async selectPlayerServer(playerId: PlayerId): Promise<boolean> {
+    const selection = this.playerServerSelection
+    if (this.phase !== 'player-server-selection' || !selection) return false
+    if (!selection.candidateIds.includes(playerId)) {
+      this.message = 'Ce joueur n’appartient pas à l’équipe attendue.'
+      this.emit()
+      return false
+    }
+
+    try {
+      let changed = true
+      if (selection.purpose === 'SECOND_SERVER') {
+        this.engine.confirmSecondServer(playerId)
+      } else {
+        changed = this.engine.correctPlayerServer(playerId)
+      }
+      if (changed) this.actionCount += 1
+      const participant = this.playerParticipant(playerId)
+      this.playerServerSelection = null
+      this.conversation.exitGuidedMode()
+      this.phase = 'match'
+      this.lastCommand =
+        selection.purpose === 'SECOND_SERVER'
+          ? 'Second serveur validé'
+          : 'Serveur PLAYER+ corrigé'
+      this.interpretation = `service ${playerId}`
+      this.rejectionReason = ''
+      this.message = participant ? `Service : ${participant.name}.` : ''
+      this.emit()
+      await this.announce(this.message)
+      return true
+    } catch (error) {
+      this.message =
+        error instanceof Error ? error.message : 'Serveur invalide.'
+      this.emit()
+      return false
+    }
+  }
+
+  cancelPlayerServerSelection(): void {
+    if (
+      this.phase !== 'player-server-selection' ||
+      this.playerServerSelection?.purpose !== 'CORRECTION'
+    ) {
+      return
+    }
+    this.playerServerSelection = null
+    this.conversation.manualCancel()
+    this.phase = 'match'
+    this.message = 'Changement de serveur annulé.'
+    this.emit()
   }
 
   cancelCorrection(): void {
@@ -988,6 +1131,7 @@ export class MatchController {
     this.correctionResult = ''
     this.feedbackMode = 'NONE'
     this.configuration = null
+    this.playerServerSelection = null
     this.editingConfiguration = createDefaultMatchConfiguration()
     this.editingRevision += 1
     this.voiceSetupSnapshot = null
@@ -1143,6 +1287,105 @@ export class MatchController {
     })
   }
 
+  private async enterPlayerServerSelection(
+    purpose: PlayerServerSelectionState['purpose'],
+  ): Promise<void> {
+    if (this.configuration?.mode !== 'PLAYERS_PLUS') return
+    const state = this.engine.getState()
+    if (state.service.mode !== 'PLAYERS_PLUS') return
+    const teamId = state.service.servingTeam
+    const candidateIds = this.configuration.participants
+      .filter((participant) => participant.teamId === teamId)
+      .map(({ id }) => id)
+    this.playerServerSelection = {
+      purpose,
+      teamId,
+      candidateIds,
+      awaitingSide: false,
+    }
+    this.conversation.exitGuidedMode()
+    this.conversation.enterGuidedMode()
+    this.phase = 'player-server-selection'
+    this.interpretation =
+      purpose === 'SECOND_SERVER'
+        ? 'attente du serveur adverse'
+        : 'correction du serveur individuel'
+    this.rejectionReason = ''
+    this.message = this.playerServerQuestion()
+    this.emit()
+    await this.announce(this.message, true)
+  }
+
+  private async handlePlayerServerSelection(
+    normalizedTranscript: string,
+  ): Promise<void> {
+    const selection = this.playerServerSelection
+    if (!selection) return
+    const command = resolveVoiceCommand(normalizedTranscript)
+    if (command?.type === 'UNDO' || command?.type === 'DECLINE') {
+      if (selection.purpose === 'CORRECTION') {
+        this.cancelPlayerServerSelection()
+        await this.announce('Changement de serveur annulé')
+      } else {
+        await this.executeAcceptedVoiceCommand(normalizedTranscript, () =>
+          this.undo(),
+        )
+      }
+      return
+    }
+    if (command) {
+      this.message = selection.awaitingSide
+        ? 'Dites droite ou gauche.'
+        : this.playerServerQuestion()
+      this.emit()
+      await this.announce(this.message, true)
+      return
+    }
+
+    let matches: PlayerParticipant[] = []
+    if (selection.awaitingSide) {
+      const side = matchesControlledResponse(normalizedTranscript, 'droite')
+        ? 'RIGHT'
+        : matchesControlledResponse(normalizedTranscript, 'gauche')
+          ? 'LEFT'
+          : null
+      if (side) {
+        matches = this.playerServerCandidates().filter(
+          (participant) => participant.side === side,
+        )
+      }
+    } else {
+      matches = this.playerServerCandidates().filter(
+        ({ name }) => normalizeSpeech(name) === normalizedTranscript,
+      )
+    }
+
+    if (matches.length > 1) {
+      selection.awaitingSide = true
+      this.lastCommand = 'Nom de joueur ambigu'
+      this.message = 'Droite ou gauche ?'
+      this.emit()
+      await this.announce(this.message, true)
+      return
+    }
+    if (matches.length !== 1) {
+      this.lastCommand = 'Joueur au service non compris'
+      this.rejectionReason = selection.awaitingSide
+        ? 'Côté inconnu.'
+        : 'Joueur inconnu.'
+      this.message = selection.awaitingSide
+        ? 'Dites droite ou gauche.'
+        : this.playerServerQuestion()
+      this.emit()
+      await this.announce(this.message, true)
+      return
+    }
+
+    await this.executeAcceptedVoiceCommand(normalizedTranscript, () =>
+      this.selectPlayerServer(matches[0].id),
+    )
+  }
+
   private async handleInlinePointCorrection(
     normalized: string,
     spokenScore: string,
@@ -1240,6 +1483,7 @@ export class MatchController {
       this.phase === 'match' ||
       this.phase === 'correction' ||
       this.phase === 'server-correction' ||
+      this.phase === 'player-server-selection' ||
       this.phase === 'session-end-confirmation' ||
       this.phase === 'session-finished'
     )
@@ -2003,6 +2247,82 @@ export class MatchController {
         },
       },
     }
+  }
+
+  private playerParticipant(playerId: PlayerId): PlayerParticipant | null {
+    if (this.configuration?.mode !== 'PLAYERS_PLUS') return null
+    return (
+      this.configuration.participants.find(({ id }) => id === playerId) ?? null
+    )
+  }
+
+  private currentPlayerParticipant(): PlayerParticipant | null {
+    const service = this.engine.getState().service
+    if (
+      service.mode !== 'PLAYERS_PLUS' ||
+      service.stage === 'AWAITING_SECOND_SERVER'
+    ) {
+      return null
+    }
+    return this.playerParticipant(service.currentServer)
+  }
+
+  private isAwaitingSecondPlayerServer(): boolean {
+    const service = this.engine.getState().service
+    return (
+      service.mode === 'PLAYERS_PLUS' &&
+      service.stage === 'AWAITING_SECOND_SERVER'
+    )
+  }
+
+  private playerServerCandidates(): PlayerParticipant[] {
+    if (this.configuration?.mode !== 'PLAYERS_PLUS') return []
+    const candidateIds = this.playerServerSelection?.candidateIds ?? []
+    return this.configuration.participants.filter(({ id }) =>
+      candidateIds.includes(id),
+    )
+  }
+
+  private playerServerQuestion(): string {
+    const selection = this.playerServerSelection
+    if (!selection || this.configuration?.mode !== 'PLAYERS_PLUS') return ''
+    const teamName =
+      selection.teamId === 'A'
+        ? this.configuration.teamA.displayName
+        : this.configuration.teamB.displayName
+    const choices = this.playerServerCandidates()
+    return `Qui sert pour ${teamName} : ${choices.map(({ name }) => name).join(' ou ')} ?`
+  }
+
+  private getPlayerServerSelectionSnapshot(): PlayerServerSelectionSnapshot | null {
+    const selection = this.playerServerSelection
+    if (!selection || this.configuration?.mode !== 'PLAYERS_PLUS') return null
+    const teamName =
+      selection.teamId === 'A'
+        ? this.configuration.teamA.displayName
+        : this.configuration.teamB.displayName
+    return {
+      purpose: selection.purpose,
+      teamId: selection.teamId,
+      teamName,
+      choices: this.playerServerCandidates().map(({ id, name, side }) => ({
+        id,
+        name,
+        side,
+      })),
+      awaitingSide: selection.awaitingSide,
+    }
+  }
+
+  private getCurrentPlayerServerSnapshot(): PlayerServerChoice | null {
+    const participant = this.currentPlayerParticipant()
+    return participant
+      ? {
+          id: participant.id,
+          name: participant.name,
+          side: participant.side,
+        }
+      : null
   }
 
   private applyServingTeamChange(team: TeamId): void {
