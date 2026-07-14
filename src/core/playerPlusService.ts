@@ -134,6 +134,67 @@ export function completePlayerServiceOrder(
   })
 }
 
+export function clonePendingPlayerServiceOrder(
+  pending: PendingPlayerServiceOrder,
+): PendingPlayerServiceOrder {
+  return initializePlayerServiceOrder(pending.participants, pending.firstServer)
+}
+
+export function cloneCompletePlayerServiceOrder(
+  complete: CompletePlayerServiceOrder,
+): CompletePlayerServiceOrder {
+  return completePlayerServiceOrder(
+    initializePlayerServiceOrder(complete.participants, complete.order[0]),
+    complete.order[1],
+  )
+}
+
+export function playerServiceOrderIndex(index: number, offset = 0): number {
+  if (!Number.isInteger(index) || !Number.isInteger(offset)) {
+    throw new Error('La position de service doit être un entier.')
+  }
+
+  const orderLength = PLAYER_IDS.length
+  return (((index + offset) % orderLength) + orderLength) % orderLength
+}
+
+export function tieBreakPlayerServiceOffset(pointsPlayed: number): number {
+  if (!Number.isInteger(pointsPlayed) || pointsPlayed < 0) {
+    throw new Error(
+      'Le nombre de points joués au tie-break doit être un entier positif ou nul.',
+    )
+  }
+  if (pointsPlayed === 0) return 0
+  return 1 + Math.floor((pointsPlayed - 1) / 2)
+}
+
+export function reanchorPlayerServiceOrder(
+  complete: CompletePlayerServiceOrder,
+  currentOrderIndex: number,
+  requestedServer: PlayerId,
+): CompletePlayerServiceOrder {
+  const currentIndex = playerServiceOrderIndex(currentOrderIndex)
+  const currentServer = complete.order[currentIndex]
+
+  findParticipant(complete.participants, requestedServer)
+  if (playerTeam(requestedServer) !== playerTeam(currentServer)) {
+    throw new Error(
+      'Le serveur corrigé doit appartenir à l’équipe actuellement au service.',
+    )
+  }
+  if (requestedServer === currentServer) return complete
+
+  const requestedIndex = complete.order.indexOf(requestedServer)
+  const correctedOrder = [...complete.order]
+  correctedOrder[currentIndex] = requestedServer
+  correctedOrder[requestedIndex] = currentServer
+
+  return completePlayerServiceOrder(
+    initializePlayerServiceOrder(complete.participants, correctedOrder[0]),
+    correctedOrder[1],
+  )
+}
+
 function validatedCopy(
   participants: readonly PlayerParticipant[],
 ): readonly PlayerParticipant[] {

@@ -262,6 +262,7 @@ describe('ScoreEngine', () => {
 
     engine.correctServingTeam('A')
     expect(engine.getState().service).toEqual({
+      mode: 'PLAYER',
       servingTeam: 'A',
       tieBreakInitialServer: 'B',
     })
