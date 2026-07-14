@@ -48,8 +48,8 @@ const MAX_VOICE_NAME_WORDS = 3
 export function createDefaultMatchConfiguration(): PlayerMatchConfiguration {
   return {
     mode: 'PLAYER',
-    teamA: { displayName: 'Équipe A', voiceName: '' },
-    teamB: { displayName: 'Équipe B', voiceName: '' },
+    teamA: { displayName: 'Équipe 1', voiceName: 'Gagné' },
+    teamB: { displayName: 'Équipe 2', voiceName: 'Perdu' },
     servingTeam: 'A',
   }
 }

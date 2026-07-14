@@ -25,6 +25,7 @@ export interface PlayerPlusPlayerDraft {
 
 export interface PlayerPlusTeamDraft {
   displayName: string
+  customDisplayName: boolean
   voiceName: string
   players: [PlayerPlusPlayerDraft, PlayerPlusPlayerDraft]
 }
@@ -75,15 +76,12 @@ export interface SetupDictationTrace {
 }
 
 export const PLAYER_PLUS_SETUP_FIELDS: readonly SetupDictationField[] = [
-  'teamA.displayName',
   'teamA.player1',
   'teamA.player2',
   'teamA.voiceName',
-  'teamB.displayName',
   'teamB.player1',
   'teamB.player2',
   'teamB.voiceName',
-  'servingPlayerId',
 ]
 
 export const SETUP_FIELD_LABELS: Record<SetupDictationField, string> = {
@@ -102,19 +100,21 @@ export function createPlayerPlusConfigurationDraft(): PlayerPlusConfigurationDra
   return {
     mode: 'PLAYERS_PLUS',
     teamA: {
-      displayName: '',
-      voiceName: '',
+      displayName: 'Équipe 1',
+      customDisplayName: false,
+      voiceName: 'Gagné',
       players: [
-        { id: 'A1', name: '', side: 'RIGHT' },
-        { id: 'A2', name: '', side: 'LEFT' },
+        { id: 'A1', name: '', side: 'LEFT' },
+        { id: 'A2', name: '', side: 'RIGHT' },
       ],
     },
     teamB: {
-      displayName: '',
-      voiceName: '',
+      displayName: 'Équipe 2',
+      customDisplayName: false,
+      voiceName: 'Perdu',
       players: [
-        { id: 'B1', name: '', side: 'RIGHT' },
-        { id: 'B2', name: '', side: 'LEFT' },
+        { id: 'B1', name: '', side: 'LEFT' },
+        { id: 'B2', name: '', side: 'RIGHT' },
       ],
     },
     servingPlayerId: '',
@@ -149,15 +149,29 @@ export function playerPlusConfigurationToDraft(
     if (!found) throw new Error(`Le participant ${id} est introuvable.`)
     return { id: found.id, name: found.name, side: found.side }
   }
+  const teamAPlayers = [
+    participant('A1'),
+    participant('A2'),
+  ] as PlayerPlusTeamDraft['players']
+  const teamBPlayers = [
+    participant('B1'),
+    participant('B2'),
+  ] as PlayerPlusTeamDraft['players']
   return {
     mode: 'PLAYERS_PLUS',
     teamA: {
       ...configuration.teamA,
-      players: [participant('A1'), participant('A2')],
+      customDisplayName:
+        configuration.teamA.displayName !==
+        automaticTeamName(teamAPlayers, 'Équipe 1'),
+      players: teamAPlayers,
     },
     teamB: {
       ...configuration.teamB,
-      players: [participant('B1'), participant('B2')],
+      customDisplayName:
+        configuration.teamB.displayName !==
+        automaticTeamName(teamBPlayers, 'Équipe 2'),
+      players: teamBPlayers,
     },
     servingPlayerId: configuration.firstServer,
   }
@@ -166,13 +180,45 @@ export function playerPlusConfigurationToDraft(
 export function isPlayerConfigurationReady(
   configuration: PlayerMatchConfiguration,
 ): boolean {
-  return validateMatchConfiguration(configuration) === null
+  return validatePlayerSetup(configuration) === null
+}
+
+export function validatePlayerSetup(
+  configuration: PlayerMatchConfiguration,
+): string | null {
+  const voiceErrorA = validateVoiceName(configuration.teamA.voiceName)
+  if (voiceErrorA) return voiceErrorA
+  const voiceErrorB = validateVoiceName(configuration.teamB.voiceName)
+  if (voiceErrorB) return voiceErrorB
+  return normalizeSpeech(configuration.teamA.voiceName) ===
+    normalizeSpeech(configuration.teamB.voiceName)
+    ? 'Les commandes de point doivent être différentes.'
+    : null
+}
+
+export function toPlayerMatchConfiguration(
+  draft: PlayerMatchConfiguration,
+  servingTeam: 'A' | 'B',
+): PlayerMatchConfiguration {
+  return {
+    mode: 'PLAYER',
+    teamA: {
+      displayName: draft.teamA.displayName.trim() || 'Équipe 1',
+      voiceName: draft.teamA.voiceName.trim(),
+    },
+    teamB: {
+      displayName: draft.teamB.displayName.trim() || 'Équipe 2',
+      voiceName: draft.teamB.voiceName.trim(),
+    },
+    servingTeam,
+  }
 }
 
 export function toPlayerPlusMatchConfiguration(
   draft: PlayerPlusConfigurationDraft,
+  firstServer: PlayerId | '' = draft.servingPlayerId,
 ): PlayerPlusConfigurationResult {
-  if (!draft.servingPlayerId) {
+  if (!firstServer) {
     return { ok: false, reason: 'Le premier serveur est obligatoire.' }
   }
 
@@ -199,7 +245,7 @@ export function toPlayerPlusMatchConfiguration(
       voiceName: draft.teamB.voiceName.trim(),
     },
     participants,
-    firstServer: draft.servingPlayerId,
+    firstServer,
   }
   const validationError = validateMatchConfiguration(configuration)
   return validationError
@@ -210,7 +256,100 @@ export function toPlayerPlusMatchConfiguration(
 export function isPlayerPlusConfigurationReady(
   draft: PlayerPlusConfigurationDraft,
 ): boolean {
-  return toPlayerPlusMatchConfiguration(draft).ok
+  return validatePlayerPlusSetup(draft) === null
+}
+
+export function validatePlayerPlusSetup(
+  draft: PlayerPlusConfigurationDraft,
+): string | null {
+  for (const player of [...draft.teamA.players, ...draft.teamB.players]) {
+    if (!player.name.trim()) return 'Les quatre prénoms sont obligatoires.'
+  }
+  const voiceErrorA = validateVoiceName(draft.teamA.voiceName)
+  if (voiceErrorA) return voiceErrorA
+  const voiceErrorB = validateVoiceName(draft.teamB.voiceName)
+  if (voiceErrorB) return voiceErrorB
+  if (
+    normalizeSpeech(draft.teamA.voiceName) ===
+    normalizeSpeech(draft.teamB.voiceName)
+  ) {
+    return 'Les commandes de point doivent être différentes.'
+  }
+  return null
+}
+
+export function automaticTeamName(
+  players: readonly PlayerPlusPlayerDraft[],
+  fallback: string,
+): string {
+  const names = players.map(({ name }) => name.trim()).filter(Boolean)
+  return names.length === 0 ? fallback : names.join(' et ')
+}
+
+export function updatePlayerName(
+  configuration: PlayerPlusConfigurationDraft,
+  playerId: PlayerId,
+  name: string,
+): PlayerPlusConfigurationDraft {
+  const teamKey = playerId.startsWith('A') ? 'teamA' : 'teamB'
+  const teamNumber = teamKey === 'teamA' ? 1 : 2
+  const team = configuration[teamKey]
+  const players = team.players.map((player) =>
+    player.id === playerId ? { ...player, name } : player,
+  ) as PlayerPlusTeamDraft['players']
+  return {
+    ...configuration,
+    [teamKey]: {
+      ...team,
+      players,
+      displayName: team.customDisplayName
+        ? team.displayName
+        : automaticTeamName(players, `Équipe ${teamNumber}`),
+    },
+  }
+}
+
+export function renamePlayerPlusTeam(
+  configuration: PlayerPlusConfigurationDraft,
+  teamKey: 'teamA' | 'teamB',
+  displayName: string,
+): PlayerPlusConfigurationDraft {
+  const teamNumber = teamKey === 'teamA' ? 1 : 2
+  const team = configuration[teamKey]
+  const value = displayName.trim()
+  return {
+    ...configuration,
+    [teamKey]: {
+      ...team,
+      customDisplayName: Boolean(value),
+      displayName:
+        value || automaticTeamName(team.players, `Équipe ${teamNumber}`),
+    },
+  }
+}
+
+export function swapPlayers(
+  configuration: PlayerPlusConfigurationDraft,
+  firstId: PlayerId,
+  secondId: PlayerId,
+): PlayerPlusConfigurationDraft {
+  if (firstId === secondId) {
+    return copyPlayerPlusConfigurationDraft(configuration)
+  }
+  const players = [
+    ...configuration.teamA.players,
+    ...configuration.teamB.players,
+  ]
+  const first = players.find(({ id }) => id === firstId)
+  const second = players.find(({ id }) => id === secondId)
+  if (!first || !second) {
+    return copyPlayerPlusConfigurationDraft(configuration)
+  }
+  return updatePlayerName(
+    updatePlayerName(configuration, firstId, second.name),
+    secondId,
+    first.name,
+  )
 }
 
 export function playerConfigurationHasData(
@@ -219,9 +358,9 @@ export function playerConfigurationHasData(
   const defaults = createDefaultMatchConfiguration()
   return (
     configuration.teamA.displayName !== defaults.teamA.displayName ||
-    configuration.teamA.voiceName.trim() !== '' ||
+    configuration.teamA.voiceName !== defaults.teamA.voiceName ||
     configuration.teamB.displayName !== defaults.teamB.displayName ||
-    configuration.teamB.voiceName.trim() !== '' ||
+    configuration.teamB.voiceName !== defaults.teamB.voiceName ||
     configuration.servingTeam !== defaults.servingTeam
   )
 }
@@ -229,11 +368,12 @@ export function playerConfigurationHasData(
 export function playerPlusConfigurationHasData(
   configuration: PlayerPlusConfigurationDraft,
 ): boolean {
+  const defaults = createPlayerPlusConfigurationDraft()
   return (
-    configuration.teamA.displayName.trim() !== '' ||
-    configuration.teamA.voiceName.trim() !== '' ||
-    configuration.teamB.displayName.trim() !== '' ||
-    configuration.teamB.voiceName.trim() !== '' ||
+    configuration.teamA.displayName !== defaults.teamA.displayName ||
+    configuration.teamA.voiceName !== defaults.teamA.voiceName ||
+    configuration.teamB.displayName !== defaults.teamB.displayName ||
+    configuration.teamB.voiceName !== defaults.teamB.voiceName ||
     configuration.teamA.players.some(({ name }) => name.trim() !== '') ||
     configuration.teamB.players.some(({ name }) => name.trim() !== '') ||
     configuration.servingPlayerId !== ''
@@ -265,17 +405,8 @@ export function swapPlayerSides(
   team: 'A' | 'B',
 ): PlayerPlusConfigurationDraft {
   const teamKey = team === 'A' ? 'teamA' : 'teamB'
-  const currentTeam = configuration[teamKey]
-  return {
-    ...configuration,
-    [teamKey]: {
-      ...currentTeam,
-      players: [
-        { ...currentTeam.players[0], side: currentTeam.players[1].side },
-        { ...currentTeam.players[1], side: currentTeam.players[0].side },
-      ],
-    },
-  }
+  const [first, second] = configuration[teamKey].players
+  return swapPlayers(configuration, first.id, second.id)
 }
 
 export function applyPlayerPlusDictation(
@@ -365,11 +496,8 @@ export function applyPlayerPlusDictation(
   const team = configuration[teamKey]
   if (property === 'player1' || property === 'player2') {
     const playerIndex = property === 'player1' ? 0 : 1
-    const players = team.players.map((player, index) =>
-      index === playerIndex ? { ...player, name: value } : player,
-    ) as PlayerPlusTeamDraft['players']
     return acceptedDictation(
-      { ...configuration, [teamKey]: { ...team, players } },
+      updatePlayerName(configuration, team.players[playerIndex].id, value),
       field,
       normalizedTranscript,
     )

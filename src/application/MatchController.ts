@@ -47,6 +47,7 @@ import {
   type MatchConfiguration,
   type PlayerMatchConfiguration,
   validateMatchConfiguration,
+  validateVoiceName,
 } from './matchConfiguration'
 import {
   VoiceMatchSetup,
@@ -705,6 +706,37 @@ export class MatchController {
     return true
   }
 
+  updateVoiceName(team: TeamId, value: string): string | null {
+    const voiceName = value.trim()
+    if (!this.configuration) return 'Aucun match en cours.'
+    if (this.phase === 'setup' || this.phase === 'voice-setup') {
+      return 'Le match n’est pas encore démarré.'
+    }
+    const validationError = validateVoiceName(voiceName)
+    if (validationError) return validationError
+    const key = team === 'A' ? 'teamA' : 'teamB'
+    const otherKey = team === 'A' ? 'teamB' : 'teamA'
+    if (
+      normalizeSpeech(voiceName) ===
+      normalizeSpeech(this.configuration[otherKey].voiceName)
+    ) {
+      return 'Les commandes de point doivent être différentes.'
+    }
+
+    this.configuration[key].voiceName = voiceName
+    this.editingConfiguration[key].voiceName = voiceName
+    this.message = ''
+    this.durableRevision += 1
+    this.emit()
+    return null
+  }
+
+  async finishSession(): Promise<boolean> {
+    if (!this.session.requestFinish()) return false
+    await this.completeSessionFinish()
+    return true
+  }
+
   changeServingTeam(team: TeamId): boolean {
     if (this.session.getSnapshot().state !== 'IN_PROGRESS') return false
     if (this.configuration?.mode === 'PLAYERS_PLUS') return false
@@ -1321,6 +1353,10 @@ export class MatchController {
       return
     }
 
+    await this.completeSessionFinish()
+  }
+
+  private async completeSessionFinish(): Promise<void> {
     this.session.confirmFinish()
     this.experience.finishMatch()
     this.conversation.exitGuidedMode()

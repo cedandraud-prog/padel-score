@@ -77,6 +77,9 @@ describe('MatchScreen', () => {
     }
     expect(html).toContain('<dt>Rouge</dt>')
     expect(html).toContain('<dt>Bleu</dt>')
+    expect(html).toContain('Commande : Rouge')
+    expect(html).toContain('Commande : Bleu')
+    expect(html).toContain('Changer les équipes')
     expect(html).not.toContain('Recommencer')
   })
 

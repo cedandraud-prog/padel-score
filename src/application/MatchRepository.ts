@@ -1,8 +1,10 @@
 import {
   copyMatchRecord,
+  copyMatchSetupDraft,
   copyMatchSessionSnapshot,
   type MatchRecord,
   type MatchSessionSnapshot,
+  type MatchSetupDraftSnapshot,
 } from './matchPersistence'
 
 export interface MatchRepository {
@@ -12,17 +14,26 @@ export interface MatchRepository {
   saveMatch(record: MatchRecord): Promise<void>
   getMatch(id: string): Promise<MatchRecord | null>
   listMatches(): Promise<MatchRecord[]>
+  saveSetupDraft(snapshot: MatchSetupDraftSnapshot): Promise<void>
+  getSetupDraft(): Promise<MatchSetupDraftSnapshot | null>
+  deleteSetupDraft(): Promise<void>
 }
 
 const DATABASE_NAME = 'padel-score'
-const DATABASE_VERSION = 1
+const DATABASE_VERSION = 2
 const ACTIVE_STORE = 'active-session'
 const MATCH_STORE = 'matches'
+const SETUP_STORE = 'setup-draft'
 const ACTIVE_KEY = 'active'
 
 interface StoredActiveSession {
   key: typeof ACTIVE_KEY
   snapshot: MatchSessionSnapshot
+}
+
+interface StoredSetupDraft {
+  key: typeof ACTIVE_KEY
+  snapshot: MatchSetupDraftSnapshot
 }
 
 export class IndexedDbMatchRepository implements MatchRepository {
@@ -89,6 +100,31 @@ export class IndexedDbMatchRepository implements MatchRepository {
       .sort((left, right) => right.closedAt.localeCompare(left.closedAt))
   }
 
+  async saveSetupDraft(snapshot: MatchSetupDraftSnapshot): Promise<void> {
+    const database = await this.database()
+    await writeTransaction(database, SETUP_STORE, (store) => {
+      store.put({ key: ACTIVE_KEY, snapshot: copyMatchSetupDraft(snapshot) })
+    })
+  }
+
+  async getSetupDraft(): Promise<MatchSetupDraftSnapshot | null> {
+    const database = await this.database()
+    const stored = await readRequest<StoredSetupDraft | undefined>(
+      database
+        .transaction(SETUP_STORE, 'readonly')
+        .objectStore(SETUP_STORE)
+        .get(ACTIVE_KEY),
+    )
+    return stored ? copyMatchSetupDraft(stored.snapshot) : null
+  }
+
+  async deleteSetupDraft(): Promise<void> {
+    const database = await this.database()
+    await writeTransaction(database, SETUP_STORE, (store) => {
+      store.delete(ACTIVE_KEY)
+    })
+  }
+
   private database(): Promise<IDBDatabase> {
     if (!this.factory) {
       return Promise.reject(new Error('Le stockage local est indisponible.'))
@@ -102,6 +138,7 @@ export class IndexedDbMatchRepository implements MatchRepository {
 
 export class InMemoryMatchRepository implements MatchRepository {
   private active: MatchSessionSnapshot | null = null
+  private setupDraft: MatchSetupDraftSnapshot | null = null
   private readonly matches = new Map<string, MatchRecord>()
 
   async saveActiveSession(snapshot: MatchSessionSnapshot): Promise<void> {
@@ -130,6 +167,18 @@ export class InMemoryMatchRepository implements MatchRepository {
       .map(copyMatchRecord)
       .sort((left, right) => right.closedAt.localeCompare(left.closedAt))
   }
+
+  async saveSetupDraft(snapshot: MatchSetupDraftSnapshot): Promise<void> {
+    this.setupDraft = copyMatchSetupDraft(snapshot)
+  }
+
+  async getSetupDraft(): Promise<MatchSetupDraftSnapshot | null> {
+    return this.setupDraft ? copyMatchSetupDraft(this.setupDraft) : null
+  }
+
+  async deleteSetupDraft(): Promise<void> {
+    this.setupDraft = null
+  }
 }
 
 function indexedDb(): IDBFactory | undefined {
@@ -148,6 +197,9 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
       }
       if (!database.objectStoreNames.contains(MATCH_STORE)) {
         database.createObjectStore(MATCH_STORE, { keyPath: 'id' })
+      }
+      if (!database.objectStoreNames.contains(SETUP_STORE)) {
+        database.createObjectStore(SETUP_STORE, { keyPath: 'key' })
       }
     }
     request.onsuccess = () => resolve(request.result)

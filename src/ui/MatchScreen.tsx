@@ -13,6 +13,9 @@ interface MatchScreenProps {
   onToggleListening(): void
   onNewMatch(): void
   onDisplayNameChange(team: TeamId, value: string): void
+  onVoiceNameChange?(team: TeamId, value: string): string | null
+  onCommandEditStateChange?(editing: boolean): void
+  onChangeTeams?(): void
   onServingTeamChange(team: TeamId): void
   onRequestPlayerServerCorrection?(): void
   onSelectPlayerServer?(playerId: PlayerId): void
@@ -68,11 +71,17 @@ export function MatchScreen({
   onToggleListening,
   onNewMatch,
   onDisplayNameChange,
+  onVoiceNameChange = () => null,
+  onCommandEditStateChange = () => undefined,
+  onChangeTeams = () => undefined,
   onServingTeamChange,
   onRequestPlayerServerCorrection,
   onSelectPlayerServer,
   onCancelPlayerServerSelection,
 }: MatchScreenProps) {
+  const [editingCommand, setEditingCommand] = useState<TeamId | null>(null)
+  const [commandDraft, setCommandDraft] = useState('')
+  const [commandError, setCommandError] = useState('')
   const { A, B } = snapshot.display.teams
   const listening = snapshot.conversation.isRunning
   const microphoneClass = `microphone microphone--${snapshot.microphoneStatus}`
@@ -107,6 +116,29 @@ export function MatchScreen({
         ]
       : MATCH_VOICE_COMMAND_HELP
 
+  const beginCommandEdit = (team: TeamId, value: string) => {
+    setEditingCommand(team)
+    setCommandDraft(value)
+    setCommandError('')
+    onCommandEditStateChange(true)
+  }
+
+  const closeCommandEdit = () => {
+    setEditingCommand(null)
+    setCommandError('')
+    onCommandEditStateChange(false)
+  }
+
+  const saveCommand = () => {
+    if (!editingCommand) return
+    const error = onVoiceNameChange(editingCommand, commandDraft)
+    if (error) {
+      setCommandError(error)
+      return
+    }
+    closeCommandEdit()
+  }
+
   return (
     <>
       <section className="scoreboard" aria-label="Score du match">
@@ -140,11 +172,60 @@ export function MatchScreen({
               >
                 <span aria-hidden="true">●</span>
               </button>
-              <EditableDisplayName
-                value={team.name}
-                teamLabel={team.name}
-                onSave={(value) => onDisplayNameChange(team.id, value)}
-              />
+              <div className="team-label">
+                <EditableDisplayName
+                  value={team.name}
+                  teamLabel={team.name}
+                  onSave={(value) => onDisplayNameChange(team.id, value)}
+                />
+                {snapshot.configuration && (
+                  <div className="team-command">
+                    {editingCommand === team.id ? (
+                      <form
+                        onSubmit={(event) => {
+                          event.preventDefault()
+                          saveCommand()
+                        }}
+                      >
+                        <label>
+                          Commande de point
+                          <input
+                            autoFocus
+                            value={commandDraft}
+                            onChange={(event) =>
+                              setCommandDraft(event.target.value)
+                            }
+                          />
+                        </label>
+                        {commandError && <p role="alert">{commandError}</p>}
+                        <button type="submit">Enregistrer</button>
+                        <button type="button" onClick={closeCommandEdit}>
+                          Annuler
+                        </button>
+                      </form>
+                    ) : (
+                      <button
+                        type="button"
+                        className="team-command-edit"
+                        onClick={() =>
+                          beginCommandEdit(
+                            team.id,
+                            team.id === 'A'
+                              ? snapshot.configuration!.teamA.voiceName
+                              : snapshot.configuration!.teamB.voiceName,
+                          )
+                        }
+                      >
+                        Commande :{' '}
+                        {team.id === 'A'
+                          ? snapshot.configuration.teamA.voiceName
+                          : snapshot.configuration.teamB.voiceName}{' '}
+                        <span aria-hidden="true">✎</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
             <span className="score-value" aria-label={`${team.sets} sets`}>
               {team.sets}
@@ -254,6 +335,11 @@ export function MatchScreen({
         >
           Point équipe A
         </button>
+        {snapshot.session.state === 'IN_PROGRESS' && (
+          <button type="button" onClick={onChangeTeams}>
+            Changer les équipes
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onPoint('B')}
@@ -294,3 +380,4 @@ export function MatchScreen({
     </>
   )
 }
+import { useState } from 'react'

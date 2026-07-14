@@ -3,9 +3,11 @@ import { ScoreEngine } from '../core/ScoreEngine'
 import { createDefaultMatchConfiguration } from './matchConfiguration'
 import {
   createMatchRecord,
+  isMatchSetupDraftSnapshot,
   MATCH_PERSISTENCE_SCHEMA_VERSION,
   type MatchSessionSnapshot,
 } from './matchPersistence'
+import { createPlayerPlusConfigurationDraft } from './setupConfiguration'
 import {
   InMemoryMatchRepository,
   type MatchRepository,
@@ -42,6 +44,40 @@ function session(id = 'match-1', pointsA = 0): MatchSessionSnapshot {
 }
 
 describe('MatchRepository', () => {
+  it('conserve puis supprime les deux brouillons et le mode sélectionné', async () => {
+    const repository = new InMemoryMatchRepository()
+    const player = createDefaultMatchConfiguration()
+    const playerPlus = createPlayerPlusConfigurationDraft()
+    playerPlus.teamA.players[0].name = 'Alice'
+
+    await repository.saveSetupDraft({
+      schemaVersion: MATCH_PERSISTENCE_SCHEMA_VERSION,
+      mode: 'PLAYERS_PLUS',
+      player,
+      playerPlus,
+      updatedAt: '2026-07-14T10:00:00.000Z',
+    })
+    playerPlus.teamA.players[0].name = 'Modifié après sauvegarde'
+
+    const loaded = await repository.getSetupDraft()
+    expect(loaded?.mode).toBe('PLAYERS_PLUS')
+    expect(loaded?.playerPlus.teamA.players[0].name).toBe('Alice')
+    await repository.deleteSetupDraft()
+    expect(await repository.getSetupDraft()).toBeNull()
+  })
+
+  it('rejette proprement un ancien brouillon de configuration invalide', () => {
+    expect(
+      isMatchSetupDraftSnapshot({
+        schemaVersion: MATCH_PERSISTENCE_SCHEMA_VERSION,
+        mode: 'PLAYERS_PLUS',
+        player: createDefaultMatchConfiguration(),
+        playerPlus: { mode: 'PLAYERS_PLUS' },
+        updatedAt: '2026-07-14T10:00:00.000Z',
+      }),
+    ).toBe(false)
+  })
+
   it('crée, remplace puis supprime la session active', async () => {
     const repository = new InMemoryMatchRepository()
     await repository.saveActiveSession(session('same', 1))
@@ -86,6 +122,9 @@ describe('MatchPersistenceService', () => {
       getActiveSession: () => repository.getActiveSession(),
       getMatch: (id) => repository.getMatch(id),
       listMatches: () => repository.listMatches(),
+      saveSetupDraft: (draft) => repository.saveSetupDraft(draft),
+      getSetupDraft: () => repository.getSetupDraft(),
+      deleteSetupDraft: () => repository.deleteSetupDraft(),
       saveMatch: async (record) => {
         calls.push('archive')
         await repository.saveMatch(record)
@@ -114,6 +153,9 @@ describe('MatchPersistenceService', () => {
       saveMatch: (record) => repository.saveMatch(record),
       getMatch: (id) => repository.getMatch(id),
       listMatches: () => repository.listMatches(),
+      saveSetupDraft: (draft) => repository.saveSetupDraft(draft),
+      getSetupDraft: () => repository.getSetupDraft(),
+      deleteSetupDraft: () => repository.deleteSetupDraft(),
       saveActiveSession: async (value) => {
         await Promise.resolve()
         order.push(value.currentScore.points.A)
@@ -144,6 +186,9 @@ describe('MatchPersistenceService', () => {
       saveMatch: (record) => repository.saveMatch(record),
       getMatch: (id) => repository.getMatch(id),
       listMatches: () => repository.listMatches(),
+      saveSetupDraft: (draft) => repository.saveSetupDraft(draft),
+      getSetupDraft: () => repository.getSetupDraft(),
+      deleteSetupDraft: () => repository.deleteSetupDraft(),
     }
     const service = new MatchPersistenceService(failing, onError)
 

@@ -1079,6 +1079,151 @@ fieldset {
   margin-top: 1rem;
 }
 
+.quick-setup,
+.initial-server {
+  width: min(100%, 48rem);
+  margin: 1.5rem auto;
+  padding: clamp(1rem, 4vw, 2rem);
+  border: 1px solid #d7dce2;
+  border-radius: 1.25rem;
+  background: #fff;
+  color: #14211d;
+  box-shadow: 0 1rem 3rem rgb(19 31 45 / 8%);
+}
+
+.quick-setup-header,
+.quick-team-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.quick-mode-selector {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0;
+  border: 0;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: #eef2f0;
+}
+
+.quick-mode-selector label {
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.quick-mode-selector label:has(input:checked) {
+  background: #14211d;
+  color: #fff;
+}
+
+.quick-mode-selector input {
+  position: absolute;
+  opacity: 0;
+}
+
+.quick-team-list {
+  display: grid;
+  gap: 1rem;
+  margin-block: 1.25rem;
+}
+
+.quick-team {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
+  border: 1px solid #d7dce2;
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.quick-team h3,
+.quick-team p {
+  margin: 0;
+}
+
+.quick-team label,
+.player-slot {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.quick-team input,
+.quick-setup select,
+.team-command input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid #aebbb6;
+  border-radius: 0.65rem;
+  font: inherit;
+}
+
+.player-slot-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.player-slot {
+  border: 2px solid #d7dce2;
+  border-radius: 0.8rem;
+  padding: 0.75rem;
+}
+
+.player-slot--selected {
+  border-color: #1b7f5f;
+  background: #eef9f5;
+}
+
+.player-slot > div,
+.initial-server-choices,
+.initial-server-teams,
+.initial-server-teams article {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.initial-server-teams {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-block: 1rem;
+}
+
+.initial-server-choices {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-block: 1rem;
+}
+
+.team-command {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.team-label {
+  display: grid;
+  min-width: 0;
+}
+
+.team-command form {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.team-command-edit {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  opacity: 0.75;
+}
+
 @media (max-width: 700px) {
   .app-shell {
     width: calc(100% - 1.5rem);
@@ -1136,6 +1281,41 @@ fieldset {
 
   .setup-team-grid {
     grid-template-columns: 1fr;
+  }
+
+  .quick-setup,
+  .initial-server {
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    padding: max(0.9rem, env(safe-area-inset-top))
+      max(0.75rem, env(safe-area-inset-right))
+      max(1.25rem, env(safe-area-inset-bottom))
+      max(0.75rem, env(safe-area-inset-left));
+  }
+
+  .quick-setup-header,
+  .quick-team-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quick-mode-selector,
+  .initial-server-choices,
+  .initial-server-teams,
+  .player-slot-list {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-mode-selector {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quick-mode-selector label {
+    text-align: center;
   }
 
   .wake-lock-warning {

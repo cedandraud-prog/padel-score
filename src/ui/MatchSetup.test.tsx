@@ -1,79 +1,90 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { createDefaultMatchConfiguration } from '../application/matchConfiguration'
-import { createPlayerPlusConfigurationDraft } from '../application/setupConfiguration'
-import { VoiceMatchSetup } from '../application/VoiceMatchSetup'
+import {
+  createPlayerPlusConfigurationDraft,
+  updatePlayerName,
+} from '../application/setupConfiguration'
 import { MatchSetup } from './MatchSetup'
 
 const callbacks = {
-  nextMissingField: null,
-  dictationTrace: null,
-  showDictationDiagnostics: false,
   onModeChange: () => undefined,
   onConfigurationChange: () => undefined,
   onPlayerPlusConfigurationChange: () => undefined,
   onDictate: () => undefined,
-  onEditStateChange: () => undefined,
-  onRestartConfiguration: () => undefined,
   onStartPlayerMatch: () => undefined,
   onStartPlayerPlusMatch: () => undefined,
 }
 
+function render(mode: 'PLAYER' | 'PLAYERS_PLUS' = 'PLAYER') {
+  return renderToStaticMarkup(
+    <MatchSetup
+      {...callbacks}
+      message=""
+      mode={mode}
+      configuration={createDefaultMatchConfiguration()}
+      playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
+      microphoneStatus="inactive"
+      dictationField={null}
+    />,
+  )
+}
+
 describe('MatchSetup', () => {
-  it('restaure la hiérarchie guidée de PLAYER sans inputs permanents', () => {
+  it('affiche une configuration PLAYER directe avec les valeurs par défaut', () => {
+    const html = render()
+
+    expect(html).toContain('value="Équipe 1"')
+    expect(html).toContain('value="Équipe 2"')
+    expect(html).toContain('value="Gagné"')
+    expect(html).toContain('value="Perdu"')
+    expect(html).toContain('Configuration prête')
+    expect(html).toContain('Démarrer le match')
+    expect(html).not.toContain('Qui sert')
+  })
+
+  it('affiche quatre emplacements fixes et la permutation en PLAYER+', () => {
+    const html = render('PLAYERS_PLUS')
+
+    expect(html).toContain('GAUCHE')
+    expect(html).toContain('DROITE')
+    expect(html.match(/Échanger/g)).toHaveLength(4)
+    expect(html).toContain('Inverser gauche et droite')
+    expect(html.match(/>Micro</g)).toHaveLength(4)
+    expect(html).not.toContain('Premier serveur')
+    expect(html).not.toContain(' / ')
+  })
+
+  it('active PLAYER+ lorsque les quatre joueurs et commandes sont valides', () => {
+    let draft = createPlayerPlusConfigurationDraft()
+    draft = updatePlayerName(draft, 'A1', 'Alice')
+    draft = updatePlayerName(draft, 'A2', 'Chloé')
+    draft = updatePlayerName(draft, 'B1', 'Paul')
+    draft = updatePlayerName(draft, 'B2', 'Marc')
     const html = renderToStaticMarkup(
       <MatchSetup
         {...callbacks}
         message=""
-        mode="PLAYER"
+        mode="PLAYERS_PLUS"
         configuration={createDefaultMatchConfiguration()}
-        playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
-        voiceSetup={null}
-        microphoneStatus="listening"
+        playerPlusConfiguration={draft}
+        microphoneStatus="inactive"
         dictationField={null}
       />,
     )
 
-    expect(html.indexOf('« Nouveau match »')).toBeLessThan(
-      html.indexOf('Écoute active'),
-    )
-    expect(html.indexOf('Écoute active')).toBeLessThan(
-      html.indexOf('Informations reconnues'),
-    )
-    expect(html).toContain('En attente…')
-    expect(html).toContain('setup-edit-value')
-    expect(html).not.toContain('<input value="Équipe A"')
-    expect(html).not.toContain('<input value="Équipe B"')
-    expect(html).toContain('« Nouveau match »')
+    const start = html.match(
+      /<button class="setup-start-match primary"[^>]*>/,
+    )?.[0]
+    expect(start).toBeDefined()
+    expect(start).not.toContain('disabled')
+    expect(html).toContain('Alice et Chloé')
+    expect(html).toContain('Paul et Marc')
   })
 
-  it('affiche la question vocale comme élément dominant', () => {
-    const setup = new VoiceMatchSetup()
-    const voiceSetup = setup.start().snapshot
-    const html = renderToStaticMarkup(
-      <MatchSetup
-        {...callbacks}
-        message=""
-        mode="PLAYER"
-        configuration={voiceSetup.configuration}
-        playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
-        voiceSetup={voiceSetup}
-        microphoneStatus="speaking"
-        dictationField={null}
-      />,
-    )
-
-    expect(html).toContain('class="setup-current-question"')
-    expect(html).toContain('<h3>Dites le nom de la première équipe.</h3>')
-    expect(html.indexOf('Question en cours')).toBeLessThan(
-      html.indexOf('Informations reconnues'),
-    )
-  })
-
-  it('active le démarrage manuel PLAYER depuis les valeurs du brouillon', () => {
+  it('désactive le démarrage lorsque les commandes sont en conflit', () => {
     const configuration = createDefaultMatchConfiguration()
-    configuration.teamA = { displayName: 'Champions', voiceName: 'Rouge' }
-    configuration.teamB = { displayName: 'Invincibles', voiceName: 'Bleu' }
+    configuration.teamB.voiceName = 'Gagné'
     const html = renderToStaticMarkup(
       <MatchSetup
         {...callbacks}
@@ -81,174 +92,12 @@ describe('MatchSetup', () => {
         mode="PLAYER"
         configuration={configuration}
         playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
-        voiceSetup={null}
-        microphoneStatus="listening"
-        dictationField={null}
-      />,
-    )
-
-    const startButton = html.match(
-      /<button class="setup-start-match"[^>]*>Démarrer le match<\/button>/,
-    )?.[0]
-    expect(startButton).toBeDefined()
-    expect(startButton).not.toContain('disabled')
-    expect(html).toContain('Champions')
-    expect(html).toContain('Rouge')
-    expect(html).not.toContain('<input value="Champions"')
-  })
-
-  it('restitue immédiatement les réponses vocales et conserve Recommencer', () => {
-    const setup = new VoiceMatchSetup()
-    setup.start()
-    setup.handle('Champions du monde')
-    const voiceSetup = setup.handle('Rouge').snapshot
-    const html = renderToStaticMarkup(
-      <MatchSetup
-        {...callbacks}
-        message=""
-        mode="PLAYER"
-        configuration={voiceSetup.configuration}
-        playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
-        voiceSetup={voiceSetup}
-        microphoneStatus="speaking"
-        dictationField={null}
-      />,
-    )
-
-    expect(html).toContain('Champions Du Monde')
-    expect(html).toContain('Rouge')
-    expect(html).toContain('Recommencer')
-    expect(html).toContain('Annonce en cours')
-    expect(html).not.toContain('<input value="Rouge"')
-  })
-
-  it('guide PLAYER+ une question à la fois sans formulaire ni moteur', () => {
-    const html = renderToStaticMarkup(
-      <MatchSetup
-        {...callbacks}
-        message=""
-        mode="PLAYERS_PLUS"
-        configuration={createDefaultMatchConfiguration()}
-        playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
-        voiceSetup={null}
-        microphoneStatus="inactive"
-        dictationField={null}
-        nextMissingField="teamA.player1"
-      />,
-    )
-
-    expect(html).toContain('Quel est le nom du premier joueur de l’équipe 1 ?')
-    expect(html.match(/Répondre à la voix/g)).toHaveLength(1)
-    expect(html).toContain('Informations reconnues')
-    expect(html).toContain('Positions')
-    expect(html).toContain('Premier serveur')
-    expect(html).toContain('Démarrer le match')
-    expect(html).toContain('Le premier serveur est obligatoire.')
-    expect(html).not.toMatch(/<input(?! type="radio")/)
-    expect(html).not.toContain('Bientôt disponible')
-  })
-
-  it('affiche un seul état de réponse vocale PLAYER+', () => {
-    const html = renderToStaticMarkup(
-      <MatchSetup
-        {...callbacks}
-        message=""
-        mode="PLAYERS_PLUS"
-        configuration={createDefaultMatchConfiguration()}
-        playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
-        voiceSetup={null}
-        microphoneStatus="listening"
-        dictationField="teamA.player1"
-        nextMissingField="teamA.player1"
-      />,
-    )
-    expect(html.match(/Parlez maintenant…/g)).toHaveLength(1)
-  })
-
-  it('utilise la formulation courte et ne répète l’explication complète qu’une fois', () => {
-    const html = renderToStaticMarkup(
-      <MatchSetup
-        {...callbacks}
-        message=""
-        mode="PLAYER"
-        configuration={createDefaultMatchConfiguration()}
-        playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
-        voiceSetup={null}
         microphoneStatus="inactive"
         dictationField={null}
       />,
     )
 
-    expect(html.match(/Mot prononcé pour lui donner un point\./g)).toHaveLength(
-      2,
-    )
-    expect(html.match(/Pendant le match, prononcez/g)).toHaveLength(1)
-    expect(html).not.toContain('Pendant le match, dites')
-  })
-
-  it('conserve le diagnostic ciblé sans l’exposer par défaut', () => {
-    const draft = createPlayerPlusConfigurationDraft()
-    const html = renderToStaticMarkup(
-      <MatchSetup
-        {...callbacks}
-        message=""
-        mode="PLAYERS_PLUS"
-        configuration={createDefaultMatchConfiguration()}
-        playerPlusConfiguration={draft}
-        voiceSetup={null}
-        microphoneStatus="inactive"
-        dictationField={null}
-        showDictationDiagnostics
-        dictationTrace={{
-          at: 1,
-          attemptId: 4,
-          targetedField: 'teamB.player2',
-          stepBefore: 'teamA.displayName',
-          draftBefore: draft,
-          rawTranscript: 'David',
-          normalizedTranscript: 'david',
-          modifiedField: 'teamB.player2',
-          rejectionReason: '',
-          stepAfter: 'teamA.displayName',
-        }}
-      />,
-    )
-
-    expect(html).toContain('Diagnostic de dictée PLAYER+')
-    expect(html).toContain('Cible : teamB.player2')
-    expect(html).toContain('Brut : David')
-    expect(html).toContain('normalisé : david')
-  })
-
-  it('active le démarrage PLAYER+ uniquement avec un brouillon valide', () => {
-    const draft = createPlayerPlusConfigurationDraft()
-    draft.teamA.displayName = 'Champions'
-    draft.teamA.voiceName = 'Rouge'
-    draft.teamA.players[0].name = 'Alice'
-    draft.teamA.players[1].name = 'Chloé'
-    draft.teamB.displayName = 'Copains'
-    draft.teamB.voiceName = 'Bleu'
-    draft.teamB.players[0].name = 'Paul'
-    draft.teamB.players[1].name = 'Marc'
-    draft.servingPlayerId = 'A1'
-
-    const html = renderToStaticMarkup(
-      <MatchSetup
-        {...callbacks}
-        message=""
-        mode="PLAYERS_PLUS"
-        configuration={createDefaultMatchConfiguration()}
-        playerPlusConfiguration={draft}
-        voiceSetup={null}
-        microphoneStatus="inactive"
-        dictationField={null}
-      />,
-    )
-
-    const startButton = html.match(
-      /<button class="setup-start-match"[^>]*>Démarrer le match<\/button>/,
-    )?.[0]
-    expect(startButton).toBeDefined()
-    expect(startButton).not.toContain('disabled')
+    expect(html).toContain('Les commandes de point doivent être différentes.')
+    expect(html).toMatch(/setup-start-match[^>]*disabled/)
   })
 })

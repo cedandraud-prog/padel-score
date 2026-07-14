@@ -1,4 +1,8 @@
-import type { MatchRecord, MatchSessionSnapshot } from './matchPersistence'
+import type {
+  MatchRecord,
+  MatchSessionSnapshot,
+  MatchSetupDraftSnapshot,
+} from './matchPersistence'
 import type { MatchRepository } from './MatchRepository'
 
 export type PersistenceErrorListener = (message: string) => void
@@ -23,12 +27,24 @@ export class MatchPersistenceService {
     return this.read(() => this.repository.getMatch(id), null)
   }
 
+  loadSetupDraft(): Promise<MatchSetupDraftSnapshot | null> {
+    return this.read(() => this.repository.getSetupDraft(), null)
+  }
+
   saveActiveSession(snapshot: MatchSessionSnapshot): Promise<boolean> {
     return this.write(() => this.repository.saveActiveSession(snapshot))
   }
 
   deleteActiveSession(): Promise<boolean> {
     return this.write(() => this.repository.deleteActiveSession())
+  }
+
+  saveSetupDraft(snapshot: MatchSetupDraftSnapshot): Promise<boolean> {
+    return this.write(() => this.repository.saveSetupDraft(snapshot))
+  }
+
+  deleteSetupDraft(): Promise<boolean> {
+    return this.write(() => this.repository.deleteSetupDraft())
   }
 
   archive(record: MatchRecord): Promise<boolean> {

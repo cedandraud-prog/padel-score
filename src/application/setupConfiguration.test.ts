@@ -8,8 +8,10 @@ import {
   playerConfigurationHasData,
   playerPlusConfigurationToDraft,
   playerPlusConfigurationHasData,
+  renamePlayerPlusTeam,
   setupModeHasData,
   swapPlayerSides,
+  swapPlayers,
   toPlayerPlusMatchConfiguration,
 } from './setupConfiguration'
 
@@ -28,10 +30,10 @@ function validPlayerPlusDraft() {
 }
 
 describe('configuration commune PLAYER / PLAYER+', () => {
-  it('conserve PLAYER comme mode par défaut sans données utilisateur', () => {
+  it('conserve PLAYER prêt par défaut sans données personnalisées', () => {
     const configuration = createDefaultMatchConfiguration()
     expect(playerConfigurationHasData(configuration)).toBe(false)
-    expect(isPlayerConfigurationReady(configuration)).toBe(false)
+    expect(isPlayerConfigurationReady(configuration)).toBe(true)
   })
 
   it('active PLAYER lorsque toutes les informations sont valides', () => {
@@ -44,12 +46,12 @@ describe('configuration commune PLAYER / PLAYER+', () => {
   it('crée PLAYER+ vide avec les côtés attendus', () => {
     const configuration = createPlayerPlusConfigurationDraft()
     expect(configuration.teamA.players.map(({ side }) => side)).toEqual([
-      'RIGHT',
       'LEFT',
+      'RIGHT',
     ])
     expect(configuration.teamB.players.map(({ side }) => side)).toEqual([
-      'RIGHT',
       'LEFT',
+      'RIGHT',
     ])
     expect(playerPlusConfigurationHasData(configuration)).toBe(false)
   })
@@ -69,8 +71,8 @@ describe('configuration commune PLAYER / PLAYER+', () => {
     configuration.teamA.players[0].name = 'Alice'
     const swapped = swapPlayerSides(configuration, 'A')
     expect(swapped.teamA.players).toEqual([
-      { id: 'A1', name: 'Alice', side: 'LEFT' },
-      { id: 'A2', name: '', side: 'RIGHT' },
+      { id: 'A1', name: '', side: 'LEFT' },
+      { id: 'A2', name: 'Alice', side: 'RIGHT' },
     ])
     expect(swapped.teamB).toEqual(configuration.teamB)
   })
@@ -106,8 +108,6 @@ describe('configuration commune PLAYER / PLAYER+', () => {
 
   it('recalcule la prochaine information après une saisie manuelle', () => {
     const configuration = createPlayerPlusConfigurationDraft()
-    expect(getNextMissingSetupField(configuration)).toBe('teamA.displayName')
-    configuration.teamA.displayName = 'Champions'
     expect(getNextMissingSetupField(configuration)).toBe('teamA.player1')
     configuration.teamA.players[0].name = 'Alice'
     expect(getNextMissingSetupField(configuration)).toBe('teamA.player2')
@@ -115,12 +115,8 @@ describe('configuration commune PLAYER / PLAYER+', () => {
 
   it('applique une dictée au champ ciblé sans réutiliser l’ancienne étape', () => {
     const configuration = createPlayerPlusConfigurationDraft()
-    configuration.teamA.displayName = 'Champions'
-    const result = applyPlayerPlusDictation(
-      configuration,
-      'teamA.player2',
-      'Chloé',
-    )
+    const renamed = renamePlayerPlusTeam(configuration, 'teamA', 'Champions')
+    const result = applyPlayerPlusDictation(renamed, 'teamA.player2', 'Chloé')
 
     expect(result.accepted).toBe(true)
     expect(result.draft.teamA.players[0].name).toBe('')
@@ -131,6 +127,7 @@ describe('configuration commune PLAYER / PLAYER+', () => {
   it('alterne clavier puis voix dans un seul brouillon', () => {
     const configuration = createPlayerPlusConfigurationDraft()
     configuration.teamA.displayName = 'Champions'
+    configuration.teamA.customDisplayName = true
     const result = applyPlayerPlusDictation(
       configuration,
       'teamA.player1',
@@ -251,7 +248,7 @@ describe('configuration commune PLAYER / PLAYER+', () => {
       ambiguous.ambiguousPlayerIds,
     )
     expect(resolved.accepted).toBe(true)
-    expect(resolved.draft.servingPlayerId).toBe('A2')
+    expect(resolved.draft.servingPlayerId).toBe('A1')
   })
 
   it('reconstruit un brouillon PLAYER+ avec les mêmes joueurs', () => {
@@ -262,9 +259,25 @@ describe('configuration commune PLAYER / PLAYER+', () => {
     const draft = playerPlusConfigurationToDraft(result.configuration)
 
     expect(draft.teamA.players).toEqual([
-      { id: 'A1', name: 'Alice', side: 'RIGHT' },
-      { id: 'A2', name: 'Chloé', side: 'LEFT' },
+      { id: 'A1', name: 'Alice', side: 'LEFT' },
+      { id: 'A2', name: 'Chloé', side: 'RIGHT' },
     ])
     expect(draft.servingPlayerId).toBe(result.configuration.firstServer)
+  })
+
+  it('échange deux joueurs sans déplacer les emplacements fixes', () => {
+    const draft = validPlayerPlusDraft()
+    const swapped = swapPlayers(draft, 'A1', 'B2')
+
+    expect(swapped.teamA.players[0]).toMatchObject({
+      id: 'A1',
+      name: 'David',
+      side: 'LEFT',
+    })
+    expect(swapped.teamB.players[1]).toMatchObject({
+      id: 'B2',
+      name: 'Alice',
+      side: 'RIGHT',
+    })
   })
 })

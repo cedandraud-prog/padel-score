@@ -233,6 +233,33 @@ function createFeedbackController(
 }
 
 describe('MatchController', () => {
+  it('remplace immédiatement une commande de point pendant le match', async () => {
+    const { controller } = createController()
+
+    expect(controller.updateVoiceName('A', 'Rouge')).toBeNull()
+    await controller.handleTranscript({ transcript: 'Lynx' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+    await controller.handleTranscript({ transcript: 'Rouge' })
+    expect(controller.getSnapshot().display.teams.A.points).toBe('15')
+  })
+
+  it('refuse une commande de point en conflit avec l’autre équipe', () => {
+    const { controller } = createController()
+
+    expect(controller.updateVoiceName('A', 'Orques')).toBe(
+      'Les commandes de point doivent être différentes.',
+    )
+    expect(controller.getSnapshot().configuration?.teamA.voiceName).toBe('Lynx')
+  })
+
+  it('termine explicitement la session pour permettre son archivage', async () => {
+    const { controller } = createController()
+
+    expect(await controller.finishSession()).toBe(true)
+    expect(controller.getSnapshot().session.state).toBe('FINISHED')
+    expect(controller.getSnapshot().phase).toBe('session-finished')
+  })
+
   it('reconnaît exactement le nom de l’équipe A', async () => {
     const { controller } = createController()
 
@@ -1100,8 +1127,8 @@ describe('MatchController corrections visuelles du MLP', () => {
 
     const snapshot = controller.getSnapshot()
     expect(snapshot.phase).toBe('voice-setup')
-    expect(snapshot.editingConfiguration.teamA.displayName).toBe('Équipe A')
-    expect(snapshot.editingConfiguration.teamA.voiceName).toBe('')
+    expect(snapshot.editingConfiguration.teamA.displayName).toBe('Équipe 1')
+    expect(snapshot.editingConfiguration.teamA.voiceName).toBe('Gagné')
     expect(recognition.startCount).toBe(startsBeforeEdit)
   })
 
@@ -1684,7 +1711,7 @@ describe('MatchController configuration', () => {
     await controller.handleTranscript({ transcript: 'Trop tôt' })
     expect(
       controller.getSnapshot().editingConfiguration.teamA.displayName,
-    ).toBe('Équipe A')
+    ).toBe('Équipe 1')
     readiness.finishCue()
     await starting
     const captured = controller.handleTranscript({ transcript: 'Champions' })

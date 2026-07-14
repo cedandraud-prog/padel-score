@@ -6,6 +6,7 @@ import {
 import { CorrectionPanel } from './ui/CorrectionPanel'
 import { MatchScreen } from './ui/MatchScreen'
 import { MatchSetup } from './ui/MatchSetup'
+import { InitialServerSelection } from './ui/InitialServerSelection'
 import { VoiceDiagnostics } from './ui/VoiceDiagnostics'
 import { SpeechRecognitionService } from './voice/SpeechRecognitionService'
 import { SpeechSynthesisService } from './voice/SpeechSynthesisService'
@@ -21,7 +22,7 @@ import {
   createPlayerPlusConfigurationDraft,
   getNextMissingSetupField,
   playerPlusConfigurationToDraft,
-  setupModeHasData,
+  toPlayerMatchConfiguration,
   toPlayerPlusMatchConfiguration,
   type PlayerPlusConfigurationDraft,
   type SetupDictationField,
@@ -30,6 +31,8 @@ import {
 } from './application/setupConfiguration'
 import type { FeedbackMode } from './voice/speechTypes'
 import type { PlayerId } from './core/playerPlusService'
+import type { TeamId } from './core/matchTypes'
+import { normalizeSpeech } from './voice/normalizeSpeech'
 import { IndexedDbMatchRepository } from './application/MatchRepository'
 import {
   MatchPersistenceService,
@@ -37,6 +40,8 @@ import {
 } from './application/MatchPersistenceService'
 import {
   createMatchRecord,
+  isMatchSetupDraftSnapshot,
+  MATCH_PERSISTENCE_SCHEMA_VERSION,
   type MatchRecord,
   type MatchSessionSnapshot,
 } from './application/matchPersistence'
@@ -75,6 +80,7 @@ export default function App() {
   } | null>(null)
   const lastSavedRevision = useRef<number | null>(null)
   const archivingMatchId = useRef<string | null>(null)
+  const postArchiveAction = useRef<'CHANGE_TEAMS' | null>(null)
   const [setupMode, setSetupMode] = useState<SetupMode>('PLAYER')
   const [playerPlusConfiguration, setPlayerPlusConfiguration] =
     useState<PlayerPlusConfigurationDraft>(() =>
@@ -85,15 +91,21 @@ export default function App() {
   const [dictationField, setDictationField] =
     useState<SetupDictationField | null>(null)
   const [setupMessage, setSetupMessage] = useState('')
-  const [setupDictationTrace, setSetupDictationTrace] =
-    useState<SetupDictationTrace | null>(null)
+  const [, setSetupDictationTrace] = useState<SetupDictationTrace | null>(null)
   const activeDictationField = useRef<SetupDictationField | null>(null)
   const playerPlusConfigurationRef = useRef(playerPlusConfiguration)
   const dictationAttemptSequence = useRef(0)
   const activeDictationAttempt = useRef<number | null>(null)
   const activeDictationReceived = useRef(false)
   const ambiguousSetupPlayerIds = useRef<readonly PlayerId[]>([])
-  const resumeControllerListeningAfterEdit = useRef(false)
+  const [pendingStart, setPendingStart] = useState<{
+    mode: SetupMode
+    feedbackMode: FeedbackMode
+  } | null>(null)
+  const [initialServerListening, setInitialServerListening] = useState(false)
+  const [initialServerMessage, setInitialServerMessage] = useState('')
+  const initialServerCandidates = useRef<readonly PlayerId[]>([])
+  const resumeControllerListeningAfterCommandEdit = useRef(false)
   const [wakeLockManager, setWakeLockManager] =
     useState<ScreenWakeLockManager | null>(null)
   const [wakeLockSnapshot, setWakeLockSnapshot] =
@@ -159,6 +171,7 @@ export default function App() {
         void persistence.archive(record).then((archived) => {
           if (!archived || cancelled) {
             archivingMatchId.current = null
+            postArchiveAction.current = null
             return
           }
           setRecapRecord(record)
@@ -167,12 +180,33 @@ export default function App() {
               ? [record, ...current.filter(({ id }) => id !== record.id)]
               : current,
           )
+          if (postArchiveAction.current === 'CHANGE_TEAMS') {
+            postArchiveAction.current = null
+            activeController.prepareNewMatch()
+            activeMatchMetadata.current = null
+            lastSavedRevision.current = null
+            archivingMatchId.current = null
+            setRecapRecord(null)
+            activeController.beginConfigurationExperience()
+            if (record.configuration.mode === 'PLAYER') {
+              setSetupMode('PLAYER')
+              activeController.updateEditingConfiguration(record.configuration)
+            } else {
+              const draft = playerPlusConfigurationToDraft(record.configuration)
+              playerPlusConfigurationRef.current = draft
+              setPlayerPlusConfiguration(draft)
+              setSetupMode('PLAYERS_PLUS')
+            }
+          }
         })
       }
     })
     setController(activeController)
     void requestPersistentStorage()
-    void persistence.loadActiveSession().then((activeSession) => {
+    void Promise.all([
+      persistence.loadActiveSession(),
+      persistence.loadSetupDraft(),
+    ]).then(([activeSession, setupDraft]) => {
       if (cancelled) return
       if (activeSession) {
         activeMatchMetadata.current = {
@@ -183,7 +217,12 @@ export default function App() {
         setPendingRestore(activeSession)
       } else {
         activeController.beginConfigurationExperience()
-        activeController.listenForNewMatch()
+        if (isMatchSetupDraftSnapshot(setupDraft)) {
+          setSetupMode(setupDraft.mode)
+          activeController.updateEditingConfiguration(setupDraft.player)
+          playerPlusConfigurationRef.current = setupDraft.playerPlus
+          setPlayerPlusConfiguration(setupDraft.playerPlus)
+        }
       }
       setPersistenceReady(true)
     })
@@ -219,15 +258,29 @@ export default function App() {
   }, [snapshot?.experience.active, wakeLockManager])
 
   useEffect(() => {
-    if (snapshot?.phase !== 'voice-setup' || setupMode !== 'PLAYERS_PLUS') {
+    if (
+      !persistenceReady ||
+      pendingRestore ||
+      !snapshot ||
+      (snapshot.phase !== 'setup' && snapshot.phase !== 'voice-setup')
+    ) {
       return
     }
-    const emptyPlayerPlus = createPlayerPlusConfigurationDraft()
-    playerPlusConfigurationRef.current = emptyPlayerPlus
-    setPlayerPlusConfiguration(emptyPlayerPlus)
-    ambiguousSetupPlayerIds.current = []
-    setSetupMode('PLAYER')
-  }, [snapshot?.phase, setupMode])
+    void persistence.saveSetupDraft({
+      schemaVersion: MATCH_PERSISTENCE_SCHEMA_VERSION,
+      mode: setupMode,
+      player: snapshot.editingConfiguration,
+      playerPlus: playerPlusConfiguration,
+      updatedAt: new Date().toISOString(),
+    })
+  }, [
+    pendingRestore,
+    persistence,
+    persistenceReady,
+    playerPlusConfiguration,
+    setupMode,
+    snapshot,
+  ])
 
   if (!controller || !snapshot) return null
 
@@ -254,7 +307,6 @@ export default function App() {
       lastSavedRevision.current = null
       controller.prepareNewMatch()
       controller.beginConfigurationExperience()
-      controller.listenForNewMatch()
     })
   }
 
@@ -286,13 +338,11 @@ export default function App() {
 
     if (!record) {
       setSetupMode('PLAYER')
-      controller.listenForNewMatch()
       return
     }
     if (record.configuration.mode === 'PLAYER') {
       setSetupMode('PLAYER')
       controller.updateEditingConfiguration(record.configuration)
-      controller.listenForNewMatch()
       return
     }
     const draft = playerPlusConfigurationToDraft(record.configuration)
@@ -307,20 +357,6 @@ export default function App() {
 
   const changeSetupMode = (nextMode: SetupMode) => {
     if (nextMode === setupMode) return
-    const hasData = setupModeHasData(
-      setupMode,
-      snapshot.editingConfiguration,
-      playerPlusConfiguration,
-    )
-    if (
-      hasData &&
-      !window.confirm(
-        'Changer de mode effacera toute la configuration en cours. Continuer ?',
-      )
-    ) {
-      return
-    }
-
     setupDictation?.stop()
     activeDictationAttempt.current = null
     activeDictationReceived.current = false
@@ -328,14 +364,8 @@ export default function App() {
     setDictationField(null)
     setSetupMessage('')
     ambiguousSetupPlayerIds.current = []
-    const emptyPlayerPlus = createPlayerPlusConfigurationDraft()
-    playerPlusConfigurationRef.current = emptyPlayerPlus
-    setPlayerPlusConfiguration(emptyPlayerPlus)
     setSetupDictationTrace(null)
-    controller.prepareNewMatch()
-    controller.beginConfigurationExperience()
     setSetupMode(nextMode)
-    if (nextMode === 'PLAYER') controller.listenForNewMatch()
     window.requestAnimationFrame(() => window.scrollTo({ top: 0 }))
   }
 
@@ -444,46 +474,165 @@ export default function App() {
     ambiguousSetupPlayerIds.current = []
   }
 
-  const changeSetupEditState = (editing: boolean) => {
-    if (editing) {
-      if (setupMode === 'PLAYER') {
-        resumeControllerListeningAfterEdit.current =
-          snapshot.conversation.isRunning
-        if (resumeControllerListeningAfterEdit.current) {
-          controller.disableListening()
+  const startPlayerMatch = (feedbackMode: FeedbackMode) => {
+    setInitialServerMessage('')
+    setPendingStart({ mode: 'PLAYER', feedbackMode })
+  }
+
+  const startPlayerPlusMatch = (feedbackMode: FeedbackMode) => {
+    setInitialServerMessage('')
+    setPendingStart({ mode: 'PLAYERS_PLUS', feedbackMode })
+  }
+
+  const completePlayerStart = (servingTeam: TeamId) => {
+    if (pendingStart?.mode !== 'PLAYER') return
+    initialServerCandidates.current = []
+    const started = controller.startConfiguredMatch({
+      configuration: toPlayerMatchConfiguration(
+        snapshot.editingConfiguration,
+        servingTeam,
+      ),
+      feedbackMode: pendingStart.feedbackMode,
+    })
+    if (!started) {
+      setInitialServerMessage('La configuration du match est invalide.')
+      return
+    }
+    setPendingStart(null)
+    void persistence.deleteSetupDraft()
+  }
+
+  const completePlayerPlusStart = (firstServer: PlayerId) => {
+    if (pendingStart?.mode !== 'PLAYERS_PLUS') return
+    const result = toPlayerPlusMatchConfiguration(
+      playerPlusConfigurationRef.current,
+      firstServer,
+    )
+    if (!result.ok) {
+      setInitialServerMessage(result.reason)
+      return
+    }
+    const started = controller.startConfiguredMatch({
+      configuration: result.configuration,
+      feedbackMode: pendingStart.feedbackMode,
+    })
+    if (!started) {
+      setInitialServerMessage('La configuration du match est invalide.')
+      return
+    }
+    initialServerCandidates.current = []
+    setPendingStart(null)
+    void persistence.deleteSetupDraft()
+  }
+
+  const listenForInitialServer = () => {
+    if (!setupDictation?.isSupported || initialServerListening) {
+      setInitialServerMessage(
+        setupDictation?.isSupported
+          ? 'Une réponse vocale est déjà en cours.'
+          : 'La dictée vocale est indisponible dans ce navigateur.',
+      )
+      return
+    }
+    setInitialServerMessage('')
+    setInitialServerListening(true)
+    setupDictation.start({
+      onStart: () => undefined,
+      onDiagnostic: () => undefined,
+      onResult: ({ transcript }) => {
+        const normalized = normalizeSpeech(transcript)
+        if (pendingStart?.mode === 'PLAYER') {
+          const matches = (['A', 'B'] as const).filter((team) => {
+            const configured =
+              team === 'A'
+                ? snapshot.editingConfiguration.teamA
+                : snapshot.editingConfiguration.teamB
+            return [configured.displayName, configured.voiceName].some(
+              (value) => normalizeSpeech(value) === normalized,
+            )
+          })
+          if (matches.length === 1) completePlayerStart(matches[0])
+          else
+            setInitialServerMessage(
+              'Équipe non reconnue. Choisissez-la à l’écran.',
+            )
+        } else if (pendingStart?.mode === 'PLAYERS_PLUS') {
+          const candidates = initialServerCandidates.current
+          if (
+            candidates.length > 1 &&
+            (normalized === 'gauche' || normalized === 'droite')
+          ) {
+            const side = normalized === 'gauche' ? 'LEFT' : 'RIGHT'
+            const player = [
+              ...playerPlusConfigurationRef.current.teamA.players,
+              ...playerPlusConfigurationRef.current.teamB.players,
+            ].find(
+              ({ id, side: playerSide }) =>
+                candidates.includes(id) && playerSide === side,
+            )
+            if (player) completePlayerPlusStart(player.id)
+          } else {
+            const players = [
+              ...playerPlusConfigurationRef.current.teamA.players,
+              ...playerPlusConfigurationRef.current.teamB.players,
+            ]
+            const matches = players.filter(
+              ({ name }) => normalizeSpeech(name) === normalized,
+            )
+            if (matches.length === 1) completePlayerPlusStart(matches[0].id)
+            else if (matches.length > 1) {
+              initialServerCandidates.current = matches.map(({ id }) => id)
+              setInitialServerMessage(
+                'Plusieurs joueurs portent ce nom. Dites gauche ou droite.',
+              )
+            } else {
+              setInitialServerMessage(
+                'Joueur non reconnu. Choisissez-le à l’écran.',
+              )
+            }
+          }
         }
-      } else {
-        activeDictationAttempt.current = null
-        activeDictationReceived.current = false
-        activeDictationField.current = null
-        setDictationField(null)
-        setupDictation?.stop()
+        setupDictation.stop()
+      },
+      onError: (_code, message) => {
+        setInitialServerMessage(message)
+        setInitialServerListening(false)
+      },
+      onEnd: () => {
+        setInitialServerListening(false)
+        if (initialServerCandidates.current.length > 1) {
+          window.setTimeout(listenForInitialServer, 0)
+        }
+      },
+    })
+  }
+
+  const changeCommandEditState = (editing: boolean) => {
+    if (editing) {
+      resumeControllerListeningAfterCommandEdit.current =
+        snapshot.conversation.isRunning
+      if (resumeControllerListeningAfterCommandEdit.current) {
+        controller.disableListening()
       }
       return
     }
-
-    if (resumeControllerListeningAfterEdit.current) {
-      resumeControllerListeningAfterEdit.current = false
+    if (resumeControllerListeningAfterCommandEdit.current) {
+      resumeControllerListeningAfterCommandEdit.current = false
       controller.enableListening()
     }
   }
 
-  const startPlayerMatch = (feedbackMode: FeedbackMode) => {
-    controller.startConfiguredMatch({
-      configuration: snapshot.editingConfiguration,
-      feedbackMode,
-    })
-  }
-
-  const startPlayerPlusMatch = (feedbackMode: FeedbackMode) => {
-    const result = toPlayerPlusMatchConfiguration(playerPlusConfiguration)
-    if (!result.ok) {
-      setSetupMessage(result.reason)
+  const changeTeams = () => {
+    if (
+      !window.confirm(
+        'Changer les équipes terminera et archivera ce match. Continuer ?',
+      )
+    ) {
       return
     }
-    controller.startConfiguredMatch({
-      configuration: result.configuration,
-      feedbackMode,
+    postArchiveAction.current = 'CHANGE_TEAMS'
+    void controller.finishSession().then((finished) => {
+      if (!finished) postArchiveAction.current = null
     })
   }
 
@@ -536,32 +685,44 @@ export default function App() {
         />
       ) : isMatchSetup ? (
         <>
-          <MatchSetup
-            message={setupMessage || snapshot.message}
-            mode={setupMode}
-            configuration={snapshot.editingConfiguration}
-            playerPlusConfiguration={playerPlusConfiguration}
-            voiceSetup={snapshot.voiceSetup}
-            microphoneStatus={
-              dictationField ? 'listening' : snapshot.microphoneStatus
-            }
-            dictationField={dictationField}
-            nextMissingField={getNextMissingSetupField(playerPlusConfiguration)}
-            dictationTrace={setupDictationTrace}
-            showDictationDiagnostics={diagnosticsEnabled}
-            onModeChange={changeSetupMode}
-            onConfigurationChange={(configuration, editedField) =>
-              controller.updateEditingConfiguration(configuration, editedField)
-            }
-            onPlayerPlusConfigurationChange={updatePlayerPlusConfiguration}
-            onDictate={dictatePlayerPlusField}
-            onEditStateChange={changeSetupEditState}
-            onRestartConfiguration={() =>
-              void controller.restartConfiguration()
-            }
-            onStartPlayerMatch={startPlayerMatch}
-            onStartPlayerPlusMatch={startPlayerPlusMatch}
-          />
+          {pendingStart ? (
+            <InitialServerSelection
+              mode={pendingStart.mode}
+              playerConfiguration={snapshot.editingConfiguration}
+              playerPlusConfiguration={playerPlusConfiguration}
+              listening={initialServerListening}
+              message={initialServerMessage}
+              onSelectTeam={completePlayerStart}
+              onSelectPlayer={completePlayerPlusStart}
+              onListen={listenForInitialServer}
+              onCancel={() => {
+                setupDictation?.stop()
+                initialServerCandidates.current = []
+                setInitialServerListening(false)
+                setInitialServerMessage('')
+                setPendingStart(null)
+              }}
+            />
+          ) : (
+            <MatchSetup
+              message={setupMessage || snapshot.message}
+              mode={setupMode}
+              configuration={snapshot.editingConfiguration}
+              playerPlusConfiguration={playerPlusConfiguration}
+              microphoneStatus={
+                dictationField ? 'listening' : snapshot.microphoneStatus
+              }
+              dictationField={dictationField}
+              onModeChange={changeSetupMode}
+              onConfigurationChange={(configuration) =>
+                controller.updateEditingConfiguration(configuration)
+              }
+              onPlayerPlusConfigurationChange={updatePlayerPlusConfiguration}
+              onDictate={dictatePlayerPlusField}
+              onStartPlayerMatch={startPlayerMatch}
+              onStartPlayerPlusMatch={startPlayerPlusMatch}
+            />
+          )}
           <button className="history-open" type="button" onClick={openHistory}>
             Historique des matchs
           </button>
@@ -580,6 +741,11 @@ export default function App() {
             onDisplayNameChange={(team, value) =>
               controller.updateDisplayName(team, value)
             }
+            onVoiceNameChange={(team, value) =>
+              controller.updateVoiceName(team, value)
+            }
+            onCommandEditStateChange={changeCommandEditState}
+            onChangeTeams={changeTeams}
             onServingTeamChange={(team) => controller.changeServingTeam(team)}
             onRequestPlayerServerCorrection={() =>
               void controller.enterServerCorrection()
