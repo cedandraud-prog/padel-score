@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { MicrophoneStatus } from '../application/MatchController'
 import type { PlayerMatchConfiguration } from '../application/matchConfiguration'
 import {
@@ -20,7 +20,10 @@ import {
   ArrowLeftRightIcon,
   MicrophoneIcon,
   PencilIcon,
+  PlayerIcon,
+  PlayIcon,
   SwapIcon,
+  TeamIcon,
 } from './Icons'
 
 interface MatchSetupProps {
@@ -90,11 +93,19 @@ export function MatchSetup({
     setSelectedPlayer(null)
   }
 
-  const teamHeading = (teamKey: TeamKey, name: string, teamNumber: number) => (
+  const teamHeading = (
+    teamKey: TeamKey,
+    name: string,
+    teamNumber: number,
+    subtitle: string,
+  ) => (
     <div className="quick-team-heading">
-      <div>
-        <span className="quick-team-index">ÉQUIPE {teamNumber}</span>
+      <span className="team-avatar" aria-hidden="true">
+        <TeamIcon />
+      </span>
+      <div className="quick-team-title">
         <h3>{name || `Équipe ${teamNumber}`}</h3>
+        <span>{subtitle}</span>
       </div>
       <button
         className="icon-button"
@@ -146,7 +157,12 @@ export function MatchSetup({
               const team = configuration[teamKey]
               return (
                 <article className="quick-team" key={teamKey}>
-                  {teamHeading(teamKey, team.displayName, index + 1)}
+                  {teamHeading(
+                    teamKey,
+                    team.displayName,
+                    index + 1,
+                    'Nom de l’équipe',
+                  )}
                   {renamingTeam === teamKey && (
                     <label className="compact-edit-field">
                       Nom facultatif
@@ -186,84 +202,114 @@ export function MatchSetup({
                 left.side === 'LEFT' ? -1 : 1,
               )
               return (
-                <article className="quick-team" key={teamKey}>
-                  {teamHeading(teamKey, team.displayName, teamIndex + 1)}
-                  {renamingTeam === teamKey && (
-                    <label className="compact-edit-field">
-                      Nom facultatif
-                      <input
-                        autoFocus
-                        value={team.customDisplayName ? team.displayName : ''}
-                        placeholder="Nom automatique"
-                        onChange={(event) =>
-                          onPlayerPlusConfigurationChange(
-                            renamePlayerPlusTeam(
-                              playerPlusConfiguration,
-                              teamKey,
-                              event.target.value,
-                            ),
-                          )
-                        }
-                      />
-                    </label>
-                  )}
-                  <div className="player-slot-list">
-                    {orderedPlayers.map((player) => {
-                      const playerIndex = team.players.findIndex(
-                        ({ id }) => id === player.id,
-                      )
-                      const field =
-                        `${teamKey}.${playerIndex === 0 ? 'player1' : 'player2'}` as SetupDictationField
-                      const sideLabel =
-                        player.side === 'LEFT' ? 'GAUCHE' : 'DROITE'
-                      return (
-                        <section
-                          className={`player-slot${selectedPlayer === player.id ? ' player-slot--selected' : ''}`}
-                          key={player.id}
-                        >
-                          <label htmlFor={`player-${player.id}`}>
-                            {sideLabel}
-                          </label>
-                          <input
-                            id={`player-${player.id}`}
-                            aria-label={`${sideLabel === 'GAUCHE' ? 'Gauche' : 'Droite'} équipe ${teamIndex + 1}`}
-                            value={player.name}
-                            placeholder="Prénom"
-                            onChange={(event) =>
-                              onPlayerPlusConfigurationChange(
-                                updatePlayerName(
-                                  playerPlusConfiguration,
-                                  player.id,
-                                  event.target.value,
-                                ),
-                              )
-                            }
-                          />
-                          <div className="player-slot-actions">
-                            <button
-                              className={`icon-button${dictationField === field ? ' icon-button--active' : ''}`}
-                              type="button"
-                              disabled={dictationField !== null}
-                              onClick={() => onDictate(field)}
-                              aria-label={`Dicter le prénom ${sideLabel.toLowerCase()}`}
-                            >
-                              <MicrophoneIcon />
-                            </button>
-                            <button
-                              className={`icon-button${selectedPlayer === player.id ? ' icon-button--active' : ''}`}
-                              type="button"
-                              onClick={() => choosePlayer(player.id)}
-                              aria-label={`Sélectionner ${player.name || `le joueur ${sideLabel.toLowerCase()}`} pour un échange`}
-                              aria-pressed={selectedPlayer === player.id}
-                            >
-                              <SwapIcon />
-                            </button>
-                          </div>
-                        </section>
-                      )
-                    })}
-                  </div>
-                  <div className="quick-team-tools">
+                <Fragment key={teamKey}>
+                  <article className="quick-team">
+                    {teamHeading(
+                      teamKey,
+                      team.displayName,
+                      teamIndex + 1,
+                      team.customDisplayName
+                        ? 'Nom personnalisé'
+                        : 'Nom automatique',
+                    )}
+                    {renamingTeam === teamKey && (
+                      <label className="compact-edit-field">
+                        Nom facultatif
+                        <input
+                          autoFocus
+                          value={team.customDisplayName ? team.displayName : ''}
+                          placeholder="Nom automatique"
+                          onChange={(event) =>
+                            onPlayerPlusConfigurationChange(
+                              renamePlayerPlusTeam(
+                                playerPlusConfiguration,
+                                teamKey,
+                                event.target.value,
+                              ),
+                            )
+                          }
+                        />
+                      </label>
+                    )}
+                    <div className="player-slot-list">
+                      {orderedPlayers.map((player) => {
+                        const playerIndex = team.players.findIndex(
+                          ({ id }) => id === player.id,
+                        )
+                        const field =
+                          `${teamKey}.${playerIndex === 0 ? 'player1' : 'player2'}` as SetupDictationField
+                        const sideLabel =
+                          player.side === 'LEFT' ? 'GAUCHE' : 'DROITE'
+                        return (
+                          <section
+                            className={`player-slot${selectedPlayer === player.id ? ' player-slot--selected' : ''}`}
+                            key={player.id}
+                          >
+                            <label htmlFor={`player-${player.id}`}>
+                              {sideLabel}
+                            </label>
+                            <div className="player-input-shell">
+                              <PlayerIcon className="player-field-icon" />
+                              <input
+                                id={`player-${player.id}`}
+                                aria-label={`${sideLabel === 'GAUCHE' ? 'Gauche' : 'Droite'} équipe ${teamIndex + 1}`}
+                                value={player.name}
+                                placeholder="Prénom du joueur"
+                                onChange={(event) =>
+                                  onPlayerPlusConfigurationChange(
+                                    updatePlayerName(
+                                      playerPlusConfiguration,
+                                      player.id,
+                                      event.target.value,
+                                    ),
+                                  )
+                                }
+                              />
+                              <button
+                                className={`field-action field-action--swap${selectedPlayer === player.id ? ' field-action--active' : ''}`}
+                                type="button"
+                                onClick={() => choosePlayer(player.id)}
+                                aria-label={`Sélectionner ${player.name || `le joueur ${sideLabel.toLowerCase()}`} pour un échange`}
+                                aria-pressed={selectedPlayer === player.id}
+                              >
+                                <SwapIcon />
+                              </button>
+                              <button
+                                className={`field-action field-action--microphone${dictationField === field ? ' field-action--active' : ''}`}
+                                type="button"
+                                disabled={dictationField !== null}
+                                onClick={() => onDictate(field)}
+                                aria-label={`Dicter le prénom ${sideLabel.toLowerCase()}`}
+                              >
+                                <MicrophoneIcon />
+                              </button>
+                            </div>
+                          </section>
+                        )
+                      })}
+                    </div>
+                    <div className="quick-team-tools">
+                      <label className="command-field command-field--compact">
+                        <span>Commande</span>
+                        <input
+                          value={team.voiceName}
+                          onChange={(event) =>
+                            onPlayerPlusConfigurationChange({
+                              ...playerPlusConfiguration,
+                              [teamKey]: {
+                                ...team,
+                                voiceName: event.target.value,
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  </article>
+                  <div
+                    className={`team-side-action${teamIndex === 1 ? ' team-side-action--last' : ''}`}
+                  >
+                    <span aria-hidden="true" />
                     <button
                       className="compact-action"
                       type="button"
@@ -275,27 +321,14 @@ export function MatchSetup({
                           ),
                         )
                       }
+                      aria-label={`Inverser gauche et droite pour l’équipe ${teamIndex + 1}`}
                     >
                       <ArrowLeftRightIcon />
                       Inverser gauche et droite
                     </button>
-                    <label className="command-field command-field--compact">
-                      <span>Commande</span>
-                      <input
-                        value={team.voiceName}
-                        onChange={(event) =>
-                          onPlayerPlusConfigurationChange({
-                            ...playerPlusConfiguration,
-                            [teamKey]: {
-                              ...team,
-                              voiceName: event.target.value,
-                            },
-                          })
-                        }
-                      />
-                    </label>
+                    <span aria-hidden="true" />
                   </div>
-                </article>
+                </Fragment>
               )
             })}
       </div>
@@ -341,6 +374,7 @@ export function MatchSetup({
               : onStartPlayerPlusMatch(feedbackMode)
           }
         >
+          <PlayIcon />
           Démarrer le match
         </button>
       </footer>

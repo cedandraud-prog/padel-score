@@ -46,3 +46,31 @@ export function ArrowLeftRightIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function TeamIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className} fill="currentColor" stroke="none">
+      <circle cx="8" cy="8" r="3" />
+      <circle cx="16" cy="8" r="3" />
+      <path d="M2.5 19c.4-4.1 2.1-6.2 5.5-6.2s5.1 2.1 5.5 6.2H2.5Z" />
+      <path d="M10.5 19c.4-4.1 2.1-6.2 5.5-6.2s5.1 2.1 5.5 6.2H10.5Z" />
+    </svg>
+  )
+}
+
+export function PlayerIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className} fill="currentColor" stroke="none">
+      <circle cx="12" cy="7" r="4" />
+      <path d="M5 21c.4-5.2 2.6-8 7-8s6.6 2.8 7 8H5Z" />
+    </svg>
+  )
+}
+
+export function PlayIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className} fill="currentColor" stroke="none">
+      <path d="M7 4.8c0-1.3 1.4-2.1 2.5-1.4l9.3 5.8c1 .6 1 2 0 2.6l-9.3 5.8C8.4 18.3 7 17.5 7 16.2V4.8Z" />
+    </svg>
+  )
+}
