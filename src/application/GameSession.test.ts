@@ -53,4 +53,26 @@ describe('GameSession', () => {
       isFinishConfirmationPending: false,
     })
   })
+
+  it('restaure une session en cours sans confirmation technique résiduelle', () => {
+    const session = new GameSession()
+    session.restore({
+      state: 'IN_PROGRESS',
+      isFinishConfirmationPending: false,
+    })
+    expect(session.getSnapshot()).toEqual({
+      state: 'IN_PROGRESS',
+      isFinishConfirmationPending: false,
+    })
+  })
+
+  it('rejette une confirmation incohérente avec une session terminée', () => {
+    const session = new GameSession()
+    expect(() =>
+      session.restore({
+        state: 'FINISHED',
+        isFinishConfirmationPending: true,
+      }),
+    ).toThrow('confirmation')
+  })
 })

@@ -505,4 +505,46 @@ describe('ScoreEngine', () => {
     expect(engine.getState().winner).toBe('A')
     expect(() => engine.awardPoint('B')).toThrow('Le match est terminé.')
   })
+
+  it('exporte et restaure un snapshot sérialisable avec son historique', () => {
+    const engine = new ScoreEngine({
+      format: 'FREE_PLAY',
+      teamNames: { A: 'Rouges', B: 'Bleus' },
+      servingTeam: 'B',
+    })
+    engine.awardPoint('B')
+    engine.correctPoints(2, 1)
+    const expected = engine.getState()
+
+    const serialized = JSON.parse(JSON.stringify(engine.exportSnapshot()))
+    const restored = ScoreEngine.fromSnapshot(serialized)
+
+    expect(restored.getState()).toEqual(expected)
+    expect(restored.undo()).toBe(true)
+    expect(restored.getState().points).toEqual({ A: 0, B: 1 })
+  })
+
+  it('restaure le détail des sets et le tie-break en cours', () => {
+    const engine = new ScoreEngine({ format: 'FREE_PLAY' })
+    winGames(engine, 'A', 6)
+    reachTieBreak(engine)
+    engine.awardPoint('B')
+    engine.awardPoint('A')
+
+    const restored = ScoreEngine.fromSnapshot(engine.exportSnapshot())
+
+    expect(restored.getState()).toEqual(engine.getState())
+    expect(restored.getState().completedSets).toEqual([{ A: 6, B: 0 }])
+    expect(restored.getState().isTieBreak).toBe(true)
+  })
+
+  it('rejette un snapshot invalide ou incompatible', () => {
+    expect(() => ScoreEngine.fromSnapshot(null)).toThrow('invalide')
+    expect(() =>
+      ScoreEngine.fromSnapshot({
+        ...new ScoreEngine().exportSnapshot(),
+        schemaVersion: 2,
+      }),
+    ).toThrow('invalide')
+  })
 })

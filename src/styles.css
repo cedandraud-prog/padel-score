@@ -1210,3 +1210,83 @@ fieldset {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.persistence-card {
+  width: min(100%, 44rem);
+  margin: 2rem auto;
+  padding: clamp(1.25rem, 5vw, 2.5rem);
+  border: 1px solid var(--line, #d7dce2);
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgb(19 31 45 / 8%);
+}
+
+.persistence-card h2 {
+  margin: 0.25rem 0 1rem;
+}
+
+.persistence-actions {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.persistence-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1rem auto;
+  padding: 0.75rem 1rem;
+  max-width: 44rem;
+  border-radius: 0.75rem;
+  background: #fff4d6;
+  color: #5f4200;
+}
+
+.persistence-loading,
+.history-open {
+  margin: 1.5rem auto;
+}
+
+.recap-score {
+  margin: 1rem 0;
+  font-size: clamp(2.5rem, 12vw, 5rem);
+  font-weight: 800;
+  letter-spacing: -0.06em;
+}
+
+.set-history,
+.history-list {
+  margin: 1rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.set-history li {
+  padding: 0.35rem 0;
+}
+
+.history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.history-list button {
+  display: grid;
+  width: 100%;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+.history-list span {
+  font-size: 0.9rem;
+  opacity: 0.75;
+}

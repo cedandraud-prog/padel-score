@@ -48,4 +48,25 @@ export class GameSession {
     this.state = 'NOT_STARTED'
     this.finishConfirmationPending = false
   }
+
+  restore(snapshot: GameSessionSnapshot): void {
+    if (
+      snapshot.state !== 'NOT_STARTED' &&
+      snapshot.state !== 'IN_PROGRESS' &&
+      snapshot.state !== 'FINISHED'
+    ) {
+      throw new Error('L’état de la session est invalide.')
+    }
+    if (typeof snapshot.isFinishConfirmationPending !== 'boolean') {
+      throw new Error('L’état de confirmation de la session est invalide.')
+    }
+    if (
+      snapshot.isFinishConfirmationPending &&
+      snapshot.state !== 'IN_PROGRESS'
+    ) {
+      throw new Error('Une confirmation exige une session en cours.')
+    }
+    this.state = snapshot.state
+    this.finishConfirmationPending = snapshot.isFinishConfirmationPending
+  }
 }

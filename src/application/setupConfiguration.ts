@@ -141,6 +141,28 @@ export function copyPlayerPlusConfigurationDraft(
   }
 }
 
+export function playerPlusConfigurationToDraft(
+  configuration: PlayerPlusMatchConfiguration,
+): PlayerPlusConfigurationDraft {
+  const participant = (id: PlayerId) => {
+    const found = configuration.participants.find((player) => player.id === id)
+    if (!found) throw new Error(`Le participant ${id} est introuvable.`)
+    return { id: found.id, name: found.name, side: found.side }
+  }
+  return {
+    mode: 'PLAYERS_PLUS',
+    teamA: {
+      ...configuration.teamA,
+      players: [participant('A1'), participant('A2')],
+    },
+    teamB: {
+      ...configuration.teamB,
+      players: [participant('B1'), participant('B2')],
+    },
+    servingPlayerId: configuration.firstServer,
+  }
+}
+
 export function isPlayerConfigurationReady(
   configuration: PlayerMatchConfiguration,
 ): boolean {

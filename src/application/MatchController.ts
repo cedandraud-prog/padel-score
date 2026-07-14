@@ -63,6 +63,10 @@ import {
   type ExperienceSessionSnapshot,
 } from './ExperienceSession'
 import type { ListeningStrategy } from '../voice/ListeningStrategy'
+import {
+  MATCH_PERSISTENCE_SCHEMA_VERSION,
+  type MatchSessionSnapshot,
+} from './matchPersistence'
 
 export interface VoiceRuntimeMetrics {
   sessionsCreated: number
@@ -203,6 +207,7 @@ export interface MatchControllerSnapshot {
   voiceMetrics: VoiceRuntimeMetrics
   voiceTrace: VoiceTraceEvent[]
   recognitionTiming: RecognitionTimingSnapshot
+  durableRevision: number
 }
 
 export interface StartMatchOptions {
@@ -289,6 +294,7 @@ export class MatchController {
   private lastExecutedVoiceCommand: { transcript: string; at: number } | null =
     null
   private actionCount = 0
+  private durableRevision = 0
   private feedbackPlaying = false
   private readinessPlaying = false
   private recognitionAttemptSequence = 0
@@ -378,6 +384,7 @@ export class MatchController {
       voiceMetrics: { ...this.voiceMetrics },
       voiceTrace: this.voiceTrace.map((event) => ({ ...event })),
       recognitionTiming: this.getRecognitionTimingSnapshot(),
+      durableRevision: this.durableRevision,
     }
   }
 
@@ -483,6 +490,7 @@ export class MatchController {
     this.readinessCue.prepare()
     this.lastExecutedVoiceCommand = null
     this.actionCount = 0
+    this.durableRevision += 1
     if (this.recognition.isSupported) {
       this.conversation.start(this.readinessCue !== NOOP_READINESS_CUE)
       this.continuousListening.startFunctionalListening()
@@ -501,6 +509,109 @@ export class MatchController {
       if (server) void this.announce(`Service : ${server.name}.`)
     }
     return true
+  }
+
+  createMatchSessionSnapshot(metadata: {
+    id: string
+    createdAt: string
+    startedAt: string
+    updatedAt?: string
+  }): MatchSessionSnapshot | null {
+    if (
+      !this.configuration ||
+      this.session.getSnapshot().state === 'NOT_STARTED'
+    ) {
+      return null
+    }
+    const engine = this.engine.exportSnapshot()
+    const state = engine.state
+    return {
+      schemaVersion: MATCH_PERSISTENCE_SCHEMA_VERSION,
+      id: metadata.id,
+      status: 'IN_PROGRESS',
+      mode: this.configuration.mode,
+      configuration: copyMatchConfiguration(this.configuration),
+      createdAt: metadata.createdAt,
+      startedAt: metadata.startedAt,
+      updatedAt: metadata.updatedAt ?? new Date(this.now()).toISOString(),
+      engine,
+      completedSets: state.completedSets.map((set) => ({ ...set })),
+      currentScore: {
+        sets: { ...state.sets },
+        games: { ...state.games },
+        points: { ...state.points },
+        isTieBreak: state.isTieBreak,
+      },
+      application: {
+        feedbackMode: this.feedbackMode,
+        actionCount: this.actionCount,
+      },
+    }
+  }
+
+  restoreMatchSession(snapshot: MatchSessionSnapshot): boolean {
+    try {
+      if (snapshot.schemaVersion !== MATCH_PERSISTENCE_SCHEMA_VERSION) {
+        throw new Error('La sauvegarde utilise une version incompatible.')
+      }
+      const validationError = validateMatchConfiguration(snapshot.configuration)
+      if (validationError) throw new Error(validationError)
+      const configuration = canonicalizeMatchConfiguration(
+        snapshot.configuration,
+      )
+      const engine = ScoreEngine.fromSnapshot(snapshot.engine)
+      if (engine.getState().service.mode !== configuration.mode) {
+        throw new Error('Le mode sauvegardé ne correspond pas au moteur.')
+      }
+
+      this.resetRecognitionForMatchStart()
+      this.recognition.stop()
+      this.engine = engine
+      this.session.restore({
+        state: 'IN_PROGRESS',
+        isFinishConfirmationPending: false,
+      })
+      this.experience.startMatch()
+      this.configuration = copyMatchConfiguration(configuration)
+      this.editingConfiguration =
+        configuration.mode === 'PLAYER'
+          ? copyMatchConfiguration(configuration)
+          : createDefaultMatchConfiguration()
+      this.playerServerSelection = null
+      this.voiceSetupSnapshot = null
+      this.phase = 'match'
+      this.microphoneStatus = this.recognition.isSupported
+        ? 'disabled'
+        : 'unavailable'
+      this.lastTranscript = ''
+      this.lastCommand = 'Match restauré'
+      this.message = this.recognition.isSupported
+        ? 'Match restauré. Réactivez l’écoute pour reprendre les commandes vocales.'
+        : 'Match restauré. Utilisez les boutons de secours.'
+      this.recognitionDiagnostics = null
+      this.conversationStatus = 'Mode normal'
+      this.normalizedTranscript = ''
+      this.interpretation = ''
+      this.rejectionReason = ''
+      this.extractedContent = ''
+      this.correctionResult = ''
+      this.feedbackMode = snapshot.application.feedbackMode
+      this.feedback.prepare(this.feedbackMode)
+      this.readinessCue.prepare()
+      this.lastExecutedVoiceCommand = null
+      this.actionCount = snapshot.application.actionCount
+      this.editingRevision += 1
+      this.durableRevision += 1
+      this.emit()
+      return true
+    } catch (error) {
+      this.message =
+        error instanceof Error
+          ? error.message
+          : 'La sauvegarde du match est invalide.'
+      this.emit()
+      return false
+    }
   }
 
   startConfiguredMatch(options: StartMatchOptions): boolean {
@@ -560,6 +671,7 @@ export class MatchController {
     this.editingConfiguration = copyMatchConfiguration(configuration)
     this.experience.beginConfiguration()
     this.editingRevision += 1
+    this.durableRevision += 1
     if (this.phase === 'voice-setup') {
       this.voiceSetup.synchronizeConfiguration(
         this.editingConfiguration,
@@ -588,6 +700,7 @@ export class MatchController {
     this.editingConfiguration[key].displayName = displayName
 
     this.message = ''
+    this.durableRevision += 1
     this.emit()
     return true
   }
@@ -886,6 +999,7 @@ export class MatchController {
     const previousPlayerServer = this.currentPlayerParticipant()?.id ?? null
     this.engine.awardPoint(team)
     this.actionCount += 1
+    this.durableRevision += 1
     const next = snapshotOf(this.engine)
     this.message = ''
 
@@ -924,6 +1038,7 @@ export class MatchController {
       return false
     }
     this.actionCount = Math.max(0, this.actionCount - 1)
+    this.durableRevision += 1
 
     if (this.phase === 'finished') {
       this.phase = 'match'
@@ -1004,6 +1119,7 @@ export class MatchController {
         changed = this.engine.correctPlayerServer(playerId)
       }
       if (changed) this.actionCount += 1
+      if (changed) this.durableRevision += 1
       const participant = this.playerParticipant(playerId)
       this.playerServerSelection = null
       this.conversation.exitGuidedMode()
@@ -1056,6 +1172,7 @@ export class MatchController {
     try {
       this.engine.correctPoints(pointsA, pointsB)
       this.actionCount += 1
+      this.durableRevision += 1
       this.conversation.exitGuidedMode()
       this.phase = 'match'
       this.conversationStatus = 'Correction appliquée'
@@ -1137,6 +1254,7 @@ export class MatchController {
     this.voiceSetupSnapshot = null
     this.lastExecutedVoiceCommand = null
     this.actionCount = 0
+    this.durableRevision += 1
     this.emit()
   }
 
@@ -1207,6 +1325,7 @@ export class MatchController {
     this.experience.finishMatch()
     this.conversation.exitGuidedMode()
     this.phase = 'session-finished'
+    this.durableRevision += 1
     this.lastCommand = 'Session terminée'
     this.message = 'Session terminée'
     this.emit()
@@ -1429,6 +1548,7 @@ export class MatchController {
     try {
       this.engine.correctPoints(parsed.pointsA, parsed.pointsB)
       this.actionCount += 1
+      this.durableRevision += 1
       this.conversation.exitGuidedMode()
       this.phase = 'match'
       this.conversationStatus = 'Correction appliquée'
@@ -2326,7 +2446,10 @@ export class MatchController {
   }
 
   private applyServingTeamChange(team: TeamId): void {
-    if (this.engine.correctServingTeam(team)) this.actionCount += 1
+    if (this.engine.correctServingTeam(team)) {
+      this.actionCount += 1
+      this.durableRevision += 1
+    }
     const teamName = this.getPresentationDisplayState().teams[team].name
     this.message = `Service : ${teamName}.`
   }

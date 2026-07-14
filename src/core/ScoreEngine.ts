@@ -3,6 +3,7 @@ import type {
   MatchState,
   PlayerPlusCompleteServiceState,
   ScoreEngineOptions,
+  ScoreEngineSnapshot,
   ServiceState,
   SetScore,
   TeamId,
@@ -110,6 +111,21 @@ export class ScoreEngine {
   constructor(options: ScoreEngineOptions = {}) {
     this.format = options.format ?? 'REGULAR_MATCH'
     this.state = createState(options)
+  }
+
+  static fromSnapshot(snapshot: unknown): ScoreEngine {
+    if (!isScoreEngineSnapshot(snapshot)) {
+      throw new Error('Le snapshot du moteur est invalide ou incompatible.')
+    }
+
+    const engine = new ScoreEngine({ format: snapshot.format })
+    engine.state = cloneState(snapshot.state)
+    engine.history.splice(
+      0,
+      engine.history.length,
+      ...snapshot.history.map(cloneState),
+    )
+    return engine
   }
 
   newMatch(options: ScoreEngineOptions = {}): void {
@@ -278,6 +294,15 @@ export class ScoreEngine {
 
   getState(): MatchState {
     return cloneState(this.state)
+  }
+
+  exportSnapshot(): ScoreEngineSnapshot {
+    return {
+      schemaVersion: 1,
+      format: this.format,
+      state: cloneState(this.state),
+      history: this.history.map(cloneState),
+    }
   }
 
   getDisplayState(): DisplayState {
@@ -505,4 +530,85 @@ export class ScoreEngine {
       throw new Error('La correction doit représenter un jeu encore en cours.')
     }
   }
+}
+
+function isScoreEngineSnapshot(value: unknown): value is ScoreEngineSnapshot {
+  if (!isRecord(value)) return false
+  if (value.schemaVersion !== 1) return false
+  if (value.format !== 'FREE_PLAY' && value.format !== 'REGULAR_MATCH') {
+    return false
+  }
+  if (!isMatchState(value.state) || !Array.isArray(value.history)) return false
+  return value.history.every(isMatchState)
+}
+
+function isMatchState(value: unknown): value is MatchState {
+  if (!isRecord(value)) return false
+  if (!isTeamNames(value.teams)) return false
+  if (!isScore(value.sets) || !isScore(value.games) || !isScore(value.points)) {
+    return false
+  }
+  if (
+    !Array.isArray(value.completedSets) ||
+    !value.completedSets.every(isScore)
+  ) {
+    return false
+  }
+  if (typeof value.isTieBreak !== 'boolean') return false
+  if (value.winner !== null && value.winner !== 'A' && value.winner !== 'B') {
+    return false
+  }
+  return isServiceState(value.service)
+}
+
+function isTeamNames(value: unknown): value is TeamNames {
+  return (
+    isRecord(value) &&
+    typeof value.A === 'string' &&
+    typeof value.B === 'string'
+  )
+}
+
+function isScore(value: unknown): value is SetScore {
+  return (
+    isRecord(value) &&
+    isNonNegativeInteger(value.A) &&
+    isNonNegativeInteger(value.B)
+  )
+}
+
+function isServiceState(value: unknown): value is ServiceState {
+  if (!isRecord(value)) return false
+  if (value.mode === 'PLAYER') {
+    return (
+      (value.servingTeam === 'A' || value.servingTeam === 'B') &&
+      (value.tieBreakInitialServer === null ||
+        value.tieBreakInitialServer === 'A' ||
+        value.tieBreakInitialServer === 'B')
+    )
+  }
+  if (value.mode !== 'PLAYERS_PLUS') return false
+
+  try {
+    cloneServiceState(value as unknown as ServiceState)
+  } catch {
+    return false
+  }
+  if (value.servingTeam !== 'A' && value.servingTeam !== 'B') return false
+  if (
+    value.stage !== 'FIRST_GAME' &&
+    value.stage !== 'AWAITING_SECOND_SERVER' &&
+    value.stage !== 'COMPLETE'
+  ) {
+    return false
+  }
+  return isRecord(value.serviceOrder)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 0
 }

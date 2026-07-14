@@ -6,6 +6,7 @@ import {
   getNextMissingSetupField,
   isPlayerConfigurationReady,
   playerConfigurationHasData,
+  playerPlusConfigurationToDraft,
   playerPlusConfigurationHasData,
   setupModeHasData,
   swapPlayerSides,
@@ -251,5 +252,19 @@ describe('configuration commune PLAYER / PLAYER+', () => {
     )
     expect(resolved.accepted).toBe(true)
     expect(resolved.draft.servingPlayerId).toBe('A2')
+  })
+
+  it('reconstruit un brouillon PLAYER+ avec les mêmes joueurs', () => {
+    const result = toPlayerPlusMatchConfiguration(validPlayerPlusDraft())
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const draft = playerPlusConfigurationToDraft(result.configuration)
+
+    expect(draft.teamA.players).toEqual([
+      { id: 'A1', name: 'Alice', side: 'RIGHT' },
+      { id: 'A2', name: 'Chloé', side: 'LEFT' },
+    ])
+    expect(draft.servingPlayerId).toBe(result.configuration.firstServer)
   })
 })

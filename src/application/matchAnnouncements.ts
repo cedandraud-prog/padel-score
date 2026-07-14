@@ -67,7 +67,10 @@ export function buildPointScoreAnnouncement(
   if (A.points === 'Avantage') return `avantage ${A.name}`
   if (B.points === 'Avantage') return `avantage ${B.name}`
   if (A.points === B.points) return `${pointValue(A.points)} partout`
-  return `${pointValue(A.points)} ${pointValue(B.points)}`
+  const servingTeam = state.match.service.servingTeam
+  const server = servingTeam === 'A' ? A : B
+  const receiver = servingTeam === 'A' ? B : A
+  return `${pointValue(server.points)} ${pointValue(receiver.points)}`
 }
 
 function gamesAnnouncement(state: AnnounceableMatchState): string {

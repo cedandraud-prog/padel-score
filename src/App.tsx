@@ -20,6 +20,7 @@ import {
   copyPlayerPlusConfigurationDraft,
   createPlayerPlusConfigurationDraft,
   getNextMissingSetupField,
+  playerPlusConfigurationToDraft,
   setupModeHasData,
   toPlayerPlusMatchConfiguration,
   type PlayerPlusConfigurationDraft,
@@ -29,6 +30,19 @@ import {
 } from './application/setupConfiguration'
 import type { FeedbackMode } from './voice/speechTypes'
 import type { PlayerId } from './core/playerPlusService'
+import { IndexedDbMatchRepository } from './application/MatchRepository'
+import {
+  MatchPersistenceService,
+  requestPersistentStorage,
+} from './application/MatchPersistenceService'
+import {
+  createMatchRecord,
+  type MatchRecord,
+  type MatchSessionSnapshot,
+} from './application/matchPersistence'
+import { RestoreSessionPrompt } from './ui/RestoreSessionPrompt'
+import { MatchRecap } from './ui/MatchRecap'
+import { MatchHistory } from './ui/MatchHistory'
 
 const strategyStore = browserListeningStrategyStore()
 const diagnosticsEnabled = new URLSearchParams(window.location.search).has(
@@ -36,9 +50,31 @@ const diagnosticsEnabled = new URLSearchParams(window.location.search).has(
 )
 
 export default function App() {
+  const [persistenceWarning, setPersistenceWarning] = useState('')
+  const [persistence] = useState(
+    () =>
+      new MatchPersistenceService(
+        new IndexedDbMatchRepository(),
+        setPersistenceWarning,
+      ),
+  )
   const [synthesis] = useState(() => new SpeechSynthesisService())
   const [controller, setController] = useState<MatchController | null>(null)
   const [snapshot, setSnapshot] = useState<MatchControllerSnapshot | null>(null)
+  const [persistenceReady, setPersistenceReady] = useState(false)
+  const [pendingRestore, setPendingRestore] =
+    useState<MatchSessionSnapshot | null>(null)
+  const [recapRecord, setRecapRecord] = useState<MatchRecord | null>(null)
+  const [historyRecords, setHistoryRecords] = useState<MatchRecord[] | null>(
+    null,
+  )
+  const activeMatchMetadata = useRef<{
+    id: string
+    createdAt: string
+    startedAt: string
+  } | null>(null)
+  const lastSavedRevision = useRef<number | null>(null)
+  const archivingMatchId = useRef<string | null>(null)
   const [setupMode, setSetupMode] = useState<SetupMode>('PLAYER')
   const [playerPlusConfiguration, setPlayerPlusConfiguration] =
     useState<PlayerPlusConfigurationDraft>(() =>
@@ -75,6 +111,7 @@ export default function App() {
     })
 
   useEffect(() => {
+    let cancelled = false
     const activeController = new MatchController(
       new SpeechRecognitionService(),
       synthesis,
@@ -83,15 +120,79 @@ export default function App() {
       new ReadinessCueService(),
       strategyStore.load(),
     )
-    activeController.beginConfigurationExperience()
-    const unsubscribe = activeController.subscribe(setSnapshot)
+    const unsubscribe = activeController.subscribe((nextSnapshot) => {
+      setSnapshot(nextSnapshot)
+      if (nextSnapshot.session.state === 'NOT_STARTED') return
+
+      if (!activeMatchMetadata.current) {
+        const startedAt = new Date().toISOString()
+        activeMatchMetadata.current = {
+          id: createMatchId(),
+          createdAt: startedAt,
+          startedAt,
+        }
+      }
+      const metadata = activeMatchMetadata.current
+      const persistentSnapshot = activeController.createMatchSessionSnapshot({
+        ...metadata,
+      })
+      if (!persistentSnapshot) return
+
+      if (nextSnapshot.session.state === 'IN_PROGRESS') {
+        if (lastSavedRevision.current === nextSnapshot.durableRevision) return
+        const revision = nextSnapshot.durableRevision
+        lastSavedRevision.current = revision
+        void persistence.saveActiveSession(persistentSnapshot).then((saved) => {
+          if (!saved && lastSavedRevision.current === revision) {
+            lastSavedRevision.current = null
+          }
+        })
+        return
+      }
+
+      if (
+        nextSnapshot.session.state === 'FINISHED' &&
+        archivingMatchId.current !== metadata.id
+      ) {
+        archivingMatchId.current = metadata.id
+        const record = createMatchRecord(persistentSnapshot, 'FINISHED')
+        void persistence.archive(record).then((archived) => {
+          if (!archived || cancelled) {
+            archivingMatchId.current = null
+            return
+          }
+          setRecapRecord(record)
+          setHistoryRecords((current) =>
+            current
+              ? [record, ...current.filter(({ id }) => id !== record.id)]
+              : current,
+          )
+        })
+      }
+    })
     setController(activeController)
-    activeController.listenForNewMatch()
+    void requestPersistentStorage()
+    void persistence.loadActiveSession().then((activeSession) => {
+      if (cancelled) return
+      if (activeSession) {
+        activeMatchMetadata.current = {
+          id: activeSession.id,
+          createdAt: activeSession.createdAt,
+          startedAt: activeSession.startedAt,
+        }
+        setPendingRestore(activeSession)
+      } else {
+        activeController.beginConfigurationExperience()
+        activeController.listenForNewMatch()
+      }
+      setPersistenceReady(true)
+    })
     return () => {
+      cancelled = true
       unsubscribe()
       activeController.destroy()
     }
-  }, [synthesis])
+  }, [persistence, synthesis])
 
   useEffect(() => {
     const recognition = new SpeechRecognitionService()
@@ -129,6 +230,80 @@ export default function App() {
   }, [snapshot?.phase, setupMode])
 
   if (!controller || !snapshot) return null
+
+  const resumePendingSession = () => {
+    if (!pendingRestore) return
+    activeMatchMetadata.current = {
+      id: pendingRestore.id,
+      createdAt: pendingRestore.createdAt,
+      startedAt: pendingRestore.startedAt,
+    }
+    lastSavedRevision.current = null
+    if (controller.restoreMatchSession(pendingRestore)) {
+      setPendingRestore(null)
+    }
+  }
+
+  const abandonPendingSession = () => {
+    if (!pendingRestore) return
+    const record = createMatchRecord(pendingRestore, 'ABANDONED')
+    void persistence.archive(record).then((archived) => {
+      if (!archived) return
+      setPendingRestore(null)
+      activeMatchMetadata.current = null
+      lastSavedRevision.current = null
+      controller.prepareNewMatch()
+      controller.beginConfigurationExperience()
+      controller.listenForNewMatch()
+    })
+  }
+
+  const resumeRecord = (record: MatchRecord) => {
+    void persistence.reopen(record).then((reopened) => {
+      if (!reopened) return
+      activeMatchMetadata.current = {
+        id: record.id,
+        createdAt: record.createdAt,
+        startedAt: record.startedAt,
+      }
+      lastSavedRevision.current = null
+      archivingMatchId.current = null
+      if (controller.restoreMatchSession(record.reopenSnapshot)) {
+        setRecapRecord(null)
+        setHistoryRecords(null)
+      }
+    })
+  }
+
+  const returnToConfiguration = (record?: MatchRecord) => {
+    controller.prepareNewMatch()
+    activeMatchMetadata.current = null
+    lastSavedRevision.current = null
+    archivingMatchId.current = null
+    setRecapRecord(null)
+    setHistoryRecords(null)
+    controller.beginConfigurationExperience()
+
+    if (!record) {
+      setSetupMode('PLAYER')
+      controller.listenForNewMatch()
+      return
+    }
+    if (record.configuration.mode === 'PLAYER') {
+      setSetupMode('PLAYER')
+      controller.updateEditingConfiguration(record.configuration)
+      controller.listenForNewMatch()
+      return
+    }
+    const draft = playerPlusConfigurationToDraft(record.configuration)
+    playerPlusConfigurationRef.current = draft
+    setPlayerPlusConfiguration(draft)
+    setSetupMode('PLAYERS_PLUS')
+  }
+
+  const openHistory = () => {
+    void persistence.listMatches().then(setHistoryRecords)
+  }
 
   const changeSetupMode = (nextMode: SetupMode) => {
     if (nextMode === setupMode) return
@@ -329,31 +504,68 @@ export default function App() {
         />
       )}
 
-      {isMatchSetup ? (
-        <MatchSetup
-          message={setupMessage || snapshot.message}
-          mode={setupMode}
-          configuration={snapshot.editingConfiguration}
-          playerPlusConfiguration={playerPlusConfiguration}
-          voiceSetup={snapshot.voiceSetup}
-          microphoneStatus={
-            dictationField ? 'listening' : snapshot.microphoneStatus
-          }
-          dictationField={dictationField}
-          nextMissingField={getNextMissingSetupField(playerPlusConfiguration)}
-          dictationTrace={setupDictationTrace}
-          showDictationDiagnostics={diagnosticsEnabled}
-          onModeChange={changeSetupMode}
-          onConfigurationChange={(configuration, editedField) =>
-            controller.updateEditingConfiguration(configuration, editedField)
-          }
-          onPlayerPlusConfigurationChange={updatePlayerPlusConfiguration}
-          onDictate={dictatePlayerPlusField}
-          onEditStateChange={changeSetupEditState}
-          onRestartConfiguration={() => void controller.restartConfiguration()}
-          onStartPlayerMatch={startPlayerMatch}
-          onStartPlayerPlusMatch={startPlayerPlusMatch}
+      {persistenceWarning && (
+        <aside className="persistence-warning" role="status">
+          <span>La sauvegarde locale est temporairement indisponible.</span>
+          <button type="button" onClick={() => setPersistenceWarning('')}>
+            Fermer
+          </button>
+        </aside>
+      )}
+
+      {!persistenceReady ? (
+        <p className="persistence-loading">Recherche d’un match en cours…</p>
+      ) : pendingRestore ? (
+        <RestoreSessionPrompt
+          session={pendingRestore}
+          onResume={resumePendingSession}
+          onAbandon={abandonPendingSession}
         />
+      ) : recapRecord ? (
+        <MatchRecap
+          record={recapRecord}
+          onResume={() => resumeRecord(recapRecord)}
+          onNewWithPlayers={() => returnToConfiguration(recapRecord)}
+          onBackToSetup={() => returnToConfiguration()}
+        />
+      ) : historyRecords ? (
+        <MatchHistory
+          records={historyRecords}
+          onOpen={setRecapRecord}
+          onClose={() => setHistoryRecords(null)}
+        />
+      ) : isMatchSetup ? (
+        <>
+          <MatchSetup
+            message={setupMessage || snapshot.message}
+            mode={setupMode}
+            configuration={snapshot.editingConfiguration}
+            playerPlusConfiguration={playerPlusConfiguration}
+            voiceSetup={snapshot.voiceSetup}
+            microphoneStatus={
+              dictationField ? 'listening' : snapshot.microphoneStatus
+            }
+            dictationField={dictationField}
+            nextMissingField={getNextMissingSetupField(playerPlusConfiguration)}
+            dictationTrace={setupDictationTrace}
+            showDictationDiagnostics={diagnosticsEnabled}
+            onModeChange={changeSetupMode}
+            onConfigurationChange={(configuration, editedField) =>
+              controller.updateEditingConfiguration(configuration, editedField)
+            }
+            onPlayerPlusConfigurationChange={updatePlayerPlusConfiguration}
+            onDictate={dictatePlayerPlusField}
+            onEditStateChange={changeSetupEditState}
+            onRestartConfiguration={() =>
+              void controller.restartConfiguration()
+            }
+            onStartPlayerMatch={startPlayerMatch}
+            onStartPlayerPlusMatch={startPlayerPlusMatch}
+          />
+          <button className="history-open" type="button" onClick={openHistory}>
+            Historique des matchs
+          </button>
+        </>
       ) : (
         <>
           <MatchScreen
@@ -395,7 +607,7 @@ export default function App() {
           )}
         </>
       )}
-      {diagnosticsEnabled && (
+      {diagnosticsEnabled && persistenceReady && !pendingRestore && (
         <VoiceDiagnostics
           snapshot={snapshot}
           wakeLock={wakeLockSnapshot}
@@ -409,4 +621,11 @@ export default function App() {
       )}
     </main>
   )
+}
+
+function createMatchId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID()
+  }
+  return `match-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }

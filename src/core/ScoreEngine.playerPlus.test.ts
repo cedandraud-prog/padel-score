@@ -402,4 +402,39 @@ describe('ScoreEngine PLAYER+', () => {
       servingTeam: 'B',
     })
   })
+
+  it('restaure un ordre PLAYER+ encore incomplet', () => {
+    const engine = playerPlusEngine('A2')
+    const restored = ScoreEngine.fromSnapshot(engine.exportSnapshot())
+
+    expect(restored.getState()).toEqual(engine.getState())
+    expect(restored.getState().service).toMatchObject({
+      mode: 'PLAYERS_PLUS',
+      stage: 'FIRST_GAME',
+      currentServer: 'A2',
+    })
+  })
+
+  it('restaure un ordre complet, ses corrections et undo', () => {
+    const engine = startCompleteOrder('A1', 'B1')
+    engine.correctPlayerServer('B2')
+    const restored = ScoreEngine.fromSnapshot(engine.exportSnapshot())
+
+    expect(completeService(restored).currentServer).toBe('B2')
+    expect(restored.undo()).toBe(true)
+    expect(completeService(restored).currentServer).toBe('B1')
+  })
+
+  it('restaure la rotation PLAYER+ pendant un tie-break', () => {
+    const engine = startCompleteOrder()
+    reachPlayerPlusTieBreak(engine)
+    engine.awardPoint('A')
+    engine.awardPoint('B')
+    engine.awardPoint('A')
+
+    const restored = ScoreEngine.fromSnapshot(engine.exportSnapshot())
+
+    expect(restored.getState()).toEqual(engine.getState())
+    expect(completeService(restored).tieBreakInitialServer).not.toBeNull()
+  })
 })

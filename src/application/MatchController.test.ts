@@ -1015,6 +1015,80 @@ describe('MatchController', () => {
   })
 })
 
+describe('MatchController persistence', () => {
+  it('restaure le score, la configuration et undo sans relancer le microphone', async () => {
+    const source = createController()
+    await source.controller.awardPoint('A')
+    await source.controller.awardPoint('B')
+    const session = source.controller.createMatchSessionSnapshot({
+      id: 'match-stable',
+      createdAt: '2026-07-14T10:00:00.000Z',
+      startedAt: '2026-07-14T10:01:00.000Z',
+    })
+    expect(session).not.toBeNull()
+
+    const recognition = new MockRecognition()
+    const restored = new MatchController(recognition, new MockSynthesis())
+    expect(restored.restoreMatchSession(session!)).toBe(true)
+
+    const snapshot = restored.getSnapshot()
+    expect(snapshot.display.teams.A.points).toBe('15')
+    expect(snapshot.display.teams.B.points).toBe('15')
+    expect(snapshot.configuration?.teamA.displayName).toBe('Lynx')
+    expect(snapshot.session.state).toBe('IN_PROGRESS')
+    expect(snapshot.experience).toEqual({ stage: 'PLAYING', active: true })
+    expect(snapshot.microphoneStatus).toBe('disabled')
+    expect(recognition.startCount).toBe(0)
+
+    expect(await restored.undo()).toBe(true)
+    expect(restored.getSnapshot().display.teams.B.points).toBe('0')
+  })
+
+  it('crée une nouvelle génération vocale seulement après action utilisateur', async () => {
+    const source = createController()
+    const session = source.controller.createMatchSessionSnapshot({
+      id: 'match-stable',
+      createdAt: '2026-07-14T10:00:00.000Z',
+      startedAt: '2026-07-14T10:01:00.000Z',
+    })!
+    const recognition = new MockRecognition()
+    const restored = new MatchController(recognition, new MockSynthesis())
+    restored.restoreMatchSession(session)
+
+    restored.enableListening()
+
+    expect(recognition.startCount).toBe(1)
+    expect(restored.getSnapshot().microphoneStatus).toBe('listening')
+  })
+
+  it('refuse une sauvegarde dont le mode ne correspond pas au moteur', () => {
+    const source = createController()
+    const session = source.controller.createMatchSessionSnapshot({
+      id: 'match-stable',
+      createdAt: '2026-07-14T10:00:00.000Z',
+      startedAt: '2026-07-14T10:01:00.000Z',
+    })!
+    const invalid = {
+      ...session,
+      mode: 'PLAYERS_PLUS' as const,
+      configuration: {
+        mode: 'PLAYERS_PLUS' as const,
+        teamA: session.configuration.teamA,
+        teamB: session.configuration.teamB,
+        participants: [],
+        firstServer: 'A1' as const,
+      },
+    }
+
+    const restored = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    expect(restored.restoreMatchSession(invalid)).toBe(false)
+    expect(restored.getSnapshot().phase).toBe('setup')
+  })
+})
+
 describe('MatchController corrections visuelles du MLP', () => {
   it('refuse l’édition du nom affiché pendant la configuration', async () => {
     const recognition = new MockRecognition()

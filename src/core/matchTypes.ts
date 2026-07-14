@@ -82,6 +82,13 @@ export interface MatchState {
   winner: TeamId | null
 }
 
+export interface ScoreEngineSnapshot {
+  schemaVersion: 1
+  format: MatchFormat
+  state: MatchState
+  history: MatchState[]
+}
+
 export type DisplayPoint =
   '0' | '15' | '30' | '40' | 'Égalité' | 'Avantage' | number
 

@@ -286,4 +286,45 @@ describe('MatchController PLAYER+', () => {
     expect(controller.getSnapshot().currentPlayerServer?.id).toBe('B1')
     expect(controller.getSnapshot().playerServerSelection).toBeNull()
   })
+
+  it('restaure PLAYER+ avant la validation du second serveur', async () => {
+    const { controller } = await started()
+    await winGame(controller, 'A')
+    const session = controller.createMatchSessionSnapshot({
+      id: 'player-plus',
+      createdAt: '2026-07-14T10:00:00.000Z',
+      startedAt: '2026-07-14T10:01:00.000Z',
+    })!
+    const recognition = new RecognitionMock()
+    const restored = new MatchController(recognition, new SynthesisMock())
+
+    expect(restored.restoreMatchSession(session)).toBe(true)
+    expect(restored.getSnapshot().currentPlayerServer).toBeNull()
+    expect(restored.getSnapshot().display.teams.A.games).toBe(1)
+    expect(recognition.startCount).toBe(0)
+    await restored.undo()
+    expect(restored.getSnapshot().display.teams.A.games).toBe(0)
+  })
+
+  it('restaure l’ordre PLAYER+ complet et la correction individuelle', async () => {
+    const { controller } = await started()
+    await winGame(controller, 'A')
+    await controller.selectPlayerServer('B1')
+    await controller.enterServerCorrection()
+    await controller.selectPlayerServer('B2')
+    const session = controller.createMatchSessionSnapshot({
+      id: 'player-plus',
+      createdAt: '2026-07-14T10:00:00.000Z',
+      startedAt: '2026-07-14T10:01:00.000Z',
+    })!
+    const restored = new MatchController(
+      new RecognitionMock(),
+      new SynthesisMock(),
+    )
+
+    expect(restored.restoreMatchSession(session)).toBe(true)
+    expect(restored.getSnapshot().currentPlayerServer?.id).toBe('B2')
+    await restored.undo()
+    expect(restored.getSnapshot().currentPlayerServer?.id).toBe('B1')
+  })
 })

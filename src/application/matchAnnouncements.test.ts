@@ -106,7 +106,7 @@ describe('matchAnnouncements', () => {
     expect(buildFullScoreAnnouncement(state)).toContain(
       'Équipe A mène quatre jeux à trois',
     )
-    expect(buildFullScoreAnnouncement(state)).toContain('quinze quarante')
+    expect(buildFullScoreAnnouncement(state)).toContain('quarante quinze')
     expect(
       buildFullScoreAnnouncement(state, { includeNextServer: false }),
     ).not.toContain('Prochain service')
@@ -170,5 +170,44 @@ describe('matchAnnouncements', () => {
     expect(buildFullScoreAnnouncement(capture(engine))).toContain(
       'Prochain service : Alice',
     )
+  })
+
+  it('annonce les points de l’équipe B en premier lorsqu’elle sert', () => {
+    const engine = new ScoreEngine({ servingTeam: 'B' })
+    engine.awardPoint('B')
+
+    expect(buildPointScoreAnnouncement(capture(engine))).toBe('quinze zéro')
+    expect(buildFullScoreAnnouncement(capture(engine))).toContain('quinze zéro')
+  })
+
+  it('utilise l’équipe du joueur au service en PLAYER+', () => {
+    const engine = new ScoreEngine({
+      playerPlus: {
+        firstServer: 'B1',
+        participants: [
+          { id: 'A1', teamId: 'A', name: 'Alice', side: 'RIGHT' },
+          { id: 'A2', teamId: 'A', name: 'Chloé', side: 'LEFT' },
+          { id: 'B1', teamId: 'B', name: 'Paul', side: 'RIGHT' },
+          { id: 'B2', teamId: 'B', name: 'Marc', side: 'LEFT' },
+        ],
+      },
+    })
+    engine.correctPoints(1, 2)
+
+    expect(buildPointScoreAnnouncement(capture(engine))).toBe('trente quinze')
+  })
+
+  it('conserve l’ordre A puis B pendant le tie-break', () => {
+    const engine = new ScoreEngine({ servingTeam: 'B' })
+    for (let game = 0; game < 6; game += 1) {
+      winGame(engine, 'A')
+      winGame(engine, 'B')
+    }
+    engine.awardPoint('A')
+    engine.awardPoint('B')
+    engine.awardPoint('A')
+
+    expect(engine.getState().service.servingTeam).toBe('B')
+    expect(buildPointScoreAnnouncement(capture(engine))).toBe('deux un')
   })
 })
