@@ -18,6 +18,11 @@ export interface SetScore {
   B: number
 }
 
+export interface ServiceState {
+  servingTeam: TeamId
+  tieBreakInitialServer: TeamId | null
+}
+
 export interface MatchState {
   teams: TeamNames
   sets: SetScore
@@ -25,8 +30,7 @@ export interface MatchState {
   points: SetScore
   completedSets: SetScore[]
   isTieBreak: boolean
-  tieBreakInitialServer: TeamId | null
-  servingTeam: TeamId
+  service: ServiceState
   winner: TeamId | null
 }
 

@@ -1087,6 +1087,45 @@ describe('MatchController corrections visuelles du MLP', () => {
     expect(controller.getSnapshot().display.teams.B.isServing).toBe(true)
   })
 
+  it('annule la correction du serveur sans annuler le point précédent', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    await controller.awardPoint('A')
+    controller.changeServingTeam('B')
+
+    expect(await controller.undo()).toBe(true)
+    let display = controller.getSnapshot().display
+    expect(display.teams.A.points).toBe('15')
+    expect(display.teams.A.isServing).toBe(true)
+
+    expect(await controller.undo()).toBe(true)
+    display = controller.getSnapshot().display
+    expect(display.teams.A.points).toBe('0')
+    expect(display.teams.A.isServing).toBe(true)
+  })
+
+  it('conserve le serveur corrigé quand le point suivant est annulé', async () => {
+    const controller = new MatchController(
+      new MockRecognition(),
+      new MockSynthesis(),
+    )
+    controller.startMatch({
+      configuration: matchConfiguration('Champions', 'Invincibles'),
+    })
+    controller.changeServingTeam('B')
+    await controller.awardPoint('A')
+
+    expect(await controller.undo()).toBe(true)
+    const display = controller.getSnapshot().display
+    expect(display.teams.A.points).toBe('0')
+    expect(display.teams.B.isServing).toBe(true)
+  })
+
   it('corrige vocalement le serveur avec le nom affiché ou la consigne vocale', async () => {
     const synthesis = new MockSynthesis()
     const controller = new MatchController(new MockRecognition(), synthesis)

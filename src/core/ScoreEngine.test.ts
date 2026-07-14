@@ -132,14 +132,16 @@ describe('ScoreEngine', () => {
     const engine = new ScoreEngine()
     const externalState = engine.getState()
     externalState.points.A = 99
+    externalState.service.servingTeam = 'B'
 
     expect(engine.getState().points.A).toBe(0)
+    expect(engine.getState().service.servingTeam).toBe('A')
   })
 
   it('permet de choisir l’équipe B comme serveur initial', () => {
     const engine = new ScoreEngine({ servingTeam: 'B' })
 
-    expect(engine.getState().servingTeam).toBe('B')
+    expect(engine.getState().service.servingTeam).toBe('B')
     expect(engine.getDisplayState().teams.B.isServing).toBe(true)
   })
 
@@ -147,24 +149,101 @@ describe('ScoreEngine', () => {
     const engine = new ScoreEngine({ servingTeam: 'B' })
     winGame(engine, 'A')
 
-    expect(engine.getState().servingTeam).toBe('A')
+    expect(engine.getState().service.servingTeam).toBe('A')
+  })
+
+  it('corrige le serveur sans modifier le score', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    engine.correctPoints(2, 1)
+    const scoreBefore = engine.getState()
+
+    expect(engine.correctServingTeam('B')).toBe(true)
+
+    const corrected = engine.getState()
+    expect(corrected.service.servingTeam).toBe('B')
+    expect(corrected.points).toEqual(scoreBefore.points)
+    expect(corrected.games).toEqual(scoreBefore.games)
+    expect(corrected.sets).toEqual(scoreBefore.sets)
+    expect(engine.getDisplayState().teams.B.isServing).toBe(true)
+  })
+
+  it('refuse une équipe de service invalide à l’exécution', () => {
+    const engine = new ScoreEngine()
+
+    expect(() => engine.correctServingTeam('C' as TeamId)).toThrow(
+      "L'équipe au service est invalide.",
+    )
+  })
+
+  it('annule une correction du serveur et restaure son état exact', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    const beforeCorrection = engine.getState()
+
+    engine.correctServingTeam('B')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getState()).toEqual(beforeCorrection)
+  })
+
+  it('historise distinctement un point puis une correction du serveur', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    engine.awardPoint('A')
+    engine.correctServingTeam('B')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getState().points).toEqual({ A: 1, B: 0 })
+    expect(engine.getState().service.servingTeam).toBe('A')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getState().points).toEqual({ A: 0, B: 0 })
+    expect(engine.getState().service.servingTeam).toBe('A')
+  })
+
+  it('conserve le serveur corrigé lorsque le point suivant est annulé', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    engine.correctServingTeam('B')
+    engine.awardPoint('A')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getState().points).toEqual({ A: 0, B: 0 })
+    expect(engine.getState().service.servingTeam).toBe('B')
+  })
+
+  it('n’historise pas une correction vers le serveur déjà actif', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    engine.awardPoint('A')
+
+    expect(engine.correctServingTeam('A')).toBe(false)
+    expect(engine.undo()).toBe(true)
+    expect(engine.getState().points).toEqual({ A: 0, B: 0 })
+    expect(engine.undo()).toBe(false)
+  })
+
+  it('fait tourner le service depuis le serveur corrigé après un jeu', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    engine.correctServingTeam('B')
+    engine.correctPoints(3, 0)
+    engine.awardPoint('A')
+
+    expect(engine.getState().games).toEqual({ A: 1, B: 0 })
+    expect(engine.getState().service.servingTeam).toBe('A')
   })
 
   it('respecte la séquence de service du tie-break', () => {
     const engine = new ScoreEngine({ servingTeam: 'A' })
     reachTieBreak(engine)
 
-    expect(engine.getState().servingTeam).toBe('A')
+    expect(engine.getState().service.servingTeam).toBe('A')
     engine.awardPoint('A')
-    expect(engine.getState().servingTeam).toBe('B')
+    expect(engine.getState().service.servingTeam).toBe('B')
     engine.awardPoint('B')
-    expect(engine.getState().servingTeam).toBe('B')
+    expect(engine.getState().service.servingTeam).toBe('B')
     engine.awardPoint('A')
-    expect(engine.getState().servingTeam).toBe('A')
+    expect(engine.getState().service.servingTeam).toBe('A')
     engine.awardPoint('B')
-    expect(engine.getState().servingTeam).toBe('A')
+    expect(engine.getState().service.servingTeam).toBe('A')
     engine.awardPoint('A')
-    expect(engine.getState().servingTeam).toBe('B')
+    expect(engine.getState().service.servingTeam).toBe('B')
   })
 
   it('donne le service du set suivant au receveur initial du tie-break', () => {
@@ -172,7 +251,47 @@ describe('ScoreEngine', () => {
     reachTieBreak(engine)
     for (let point = 0; point < 7; point += 1) engine.awardPoint('A')
 
-    expect(engine.getState().servingTeam).toBe('B')
+    expect(engine.getState().service.servingTeam).toBe('B')
+  })
+
+  it('ré-ancre la séquence du tie-break sur le serveur corrigé', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    reachTieBreak(engine)
+    engine.awardPoint('A')
+    expect(engine.getState().service.servingTeam).toBe('B')
+
+    engine.correctServingTeam('A')
+    expect(engine.getState().service).toEqual({
+      servingTeam: 'A',
+      tieBreakInitialServer: 'B',
+    })
+
+    engine.awardPoint('B')
+    expect(engine.getState().service.servingTeam).toBe('A')
+    engine.awardPoint('A')
+    expect(engine.getState().service.servingTeam).toBe('B')
+  })
+
+  it('annule le serveur et l’ancre corrigés pendant le tie-break', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    reachTieBreak(engine)
+    engine.awardPoint('A')
+    const beforeCorrection = engine.getState()
+
+    engine.correctServingTeam('A')
+
+    expect(engine.undo()).toBe(true)
+    expect(engine.getState()).toEqual(beforeCorrection)
+  })
+
+  it('conserve un serveur de set suivant cohérent après correction du tie-break', () => {
+    const engine = new ScoreEngine({ servingTeam: 'A' })
+    reachTieBreak(engine)
+    engine.correctServingTeam('B')
+    for (let point = 0; point < 7; point += 1) engine.awardPoint('A')
+
+    expect(engine.getState().sets).toEqual({ A: 1, B: 0 })
+    expect(engine.getState().service.servingTeam).toBe('A')
   })
 
   it('gagne un set 7-5', () => {
@@ -342,7 +461,7 @@ describe('ScoreEngine', () => {
     // un point, puis chaque équipe sert deux points consécutifs.
     engine.correctPoints(2, 1)
 
-    expect(engine.getState().servingTeam).toBe('A')
+    expect(engine.getState().service.servingTeam).toBe('A')
   })
 
   it('démarre un nouveau match avec de nouveaux noms et un nouveau serveur', () => {
@@ -355,7 +474,7 @@ describe('ScoreEngine', () => {
 
     const state = engine.getState()
     expect(state.teams).toEqual({ A: 'Lynx', B: 'Orques' })
-    expect(state.servingTeam).toBe('B')
+    expect(state.service.servingTeam).toBe('B')
     expect(state.points).toEqual({ A: 0, B: 0 })
     expect(state.sets).toEqual({ A: 0, B: 0 })
   })

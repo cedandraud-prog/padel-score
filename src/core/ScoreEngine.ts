@@ -30,6 +30,7 @@ function cloneState(state: MatchState): MatchState {
     sets: { ...state.sets },
     games: { ...state.games },
     points: { ...state.points },
+    service: { ...state.service },
     completedSets: state.completedSets.map((set) => ({ ...set })),
   }
 }
@@ -42,8 +43,10 @@ function createState(options: ScoreEngineOptions = {}): MatchState {
     points: emptyScore(),
     completedSets: [],
     isTieBreak: false,
-    tieBreakInitialServer: null,
-    servingTeam: options.servingTeam ?? 'A',
+    service: {
+      tieBreakInitialServer: null,
+      servingTeam: options.servingTeam ?? 'A',
+    },
     winner: null,
   }
 }
@@ -81,9 +84,9 @@ export class ScoreEngine {
         return
       }
 
-      const firstServer = this.state.tieBreakInitialServer
+      const firstServer = this.state.service.tieBreakInitialServer
       if (firstServer) {
-        this.state.servingTeam = tieBreakServer(
+        this.state.service.servingTeam = tieBreakServer(
           firstServer,
           this.state.points.A + this.state.points.B,
         )
@@ -108,12 +111,33 @@ export class ScoreEngine {
     this.rememberState()
     this.state.points = { A: pointsA, B: pointsB }
 
-    if (this.state.isTieBreak && this.state.tieBreakInitialServer) {
-      this.state.servingTeam = tieBreakServer(
-        this.state.tieBreakInitialServer,
+    if (this.state.isTieBreak && this.state.service.tieBreakInitialServer) {
+      this.state.service.servingTeam = tieBreakServer(
+        this.state.service.tieBreakInitialServer,
         pointsA + pointsB,
       )
     }
+  }
+
+  correctServingTeam(team: TeamId): boolean {
+    if (team !== 'A' && team !== 'B') {
+      throw new Error("L'équipe au service est invalide.")
+    }
+    if (this.state.winner) {
+      throw new Error('Le match est terminé.')
+    }
+    if (this.state.service.servingTeam === team) return false
+
+    this.rememberState()
+    this.state.service.servingTeam = team
+
+    if (this.state.isTieBreak) {
+      const pointsPlayed = this.state.points.A + this.state.points.B
+      this.state.service.tieBreakInitialServer =
+        tieBreakServer('A', pointsPlayed) === team ? 'A' : 'B'
+    }
+
+    return true
   }
 
   getState(): MatchState {
@@ -134,7 +158,7 @@ export class ScoreEngine {
           sets: this.state.sets.A,
           games: this.state.games.A,
           points: pointFor('A'),
-          isServing: this.state.servingTeam === 'A',
+          isServing: this.state.service.servingTeam === 'A',
           isWinner: this.state.winner === 'A',
         },
         B: {
@@ -143,7 +167,7 @@ export class ScoreEngine {
           sets: this.state.sets.B,
           games: this.state.games.B,
           points: pointFor('B'),
-          isServing: this.state.servingTeam === 'B',
+          isServing: this.state.service.servingTeam === 'B',
           isWinner: this.state.winner === 'B',
         },
       },
@@ -161,7 +185,7 @@ export class ScoreEngine {
   private completeGame(team: TeamId): void {
     this.state.games[team] += 1
     this.state.points = emptyScore()
-    this.state.servingTeam = otherTeam(this.state.servingTeam)
+    this.state.service.servingTeam = otherTeam(this.state.service.servingTeam)
 
     if (winsSet(this.state.games, team)) {
       this.completeSet(team)
@@ -173,17 +197,17 @@ export class ScoreEngine {
       this.state.games.B === TIE_BREAK_AT_GAMES
     ) {
       this.state.isTieBreak = true
-      this.state.tieBreakInitialServer = this.state.servingTeam
+      this.state.service.tieBreakInitialServer = this.state.service.servingTeam
     }
   }
 
   private completeTieBreak(team: TeamId): void {
     this.state.games[team] += 1
-    const nextSetServer = this.state.tieBreakInitialServer
-      ? otherTeam(this.state.tieBreakInitialServer)
-      : this.state.servingTeam
+    const nextSetServer = this.state.service.tieBreakInitialServer
+      ? otherTeam(this.state.service.tieBreakInitialServer)
+      : this.state.service.servingTeam
     this.completeSet(team)
-    this.state.servingTeam = nextSetServer
+    this.state.service.servingTeam = nextSetServer
   }
 
   private completeSet(team: TeamId): void {
@@ -192,7 +216,7 @@ export class ScoreEngine {
     this.state.games = emptyScore()
     this.state.points = emptyScore()
     this.state.isTieBreak = false
-    this.state.tieBreakInitialServer = null
+    this.state.service.tieBreakInitialServer = null
 
     if (
       this.format === 'REGULAR_MATCH' &&

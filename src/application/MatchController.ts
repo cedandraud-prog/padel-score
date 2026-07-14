@@ -247,7 +247,6 @@ export class MatchController {
   private feedbackMode: FeedbackMode = 'NONE'
   private configuration: MatchConfiguration | null = null
   private editingConfiguration = createDefaultMatchConfiguration()
-  private servingTeamSwapped = false
   private editingRevision = 0
   private readonly voiceSetup = new VoiceMatchSetup()
   private readonly waitingVoiceEntry = new WaitingVoiceEntry()
@@ -418,7 +417,6 @@ export class MatchController {
     this.experience.startMatch()
     this.configuration = copyMatchConfiguration(options.configuration)
     this.editingConfiguration = copyMatchConfiguration(options.configuration)
-    this.servingTeamSwapped = false
     this.voiceSetupSnapshot = null
     this.phase = 'match'
     this.lastTranscript = ''
@@ -991,7 +989,6 @@ export class MatchController {
     this.feedbackMode = 'NONE'
     this.configuration = null
     this.editingConfiguration = createDefaultMatchConfiguration()
-    this.servingTeamSwapped = false
     this.editingRevision += 1
     this.voiceSetupSnapshot = null
     this.lastExecutedVoiceCommand = null
@@ -1992,12 +1989,6 @@ export class MatchController {
 
   private getPresentationDisplayState(): DisplayState {
     const display = this.engine.getDisplayState()
-    const engineServingTeam = this.engine.getState().servingTeam
-    const servingTeam = this.servingTeamSwapped
-      ? engineServingTeam === 'A'
-        ? 'B'
-        : 'A'
-      : engineServingTeam
 
     return {
       ...display,
@@ -2005,20 +1996,17 @@ export class MatchController {
         A: {
           ...display.teams.A,
           name: this.configuration?.teamA.displayName ?? display.teams.A.name,
-          isServing: servingTeam === 'A',
         },
         B: {
           ...display.teams.B,
           name: this.configuration?.teamB.displayName ?? display.teams.B.name,
-          isServing: servingTeam === 'B',
         },
       },
     }
   }
 
   private applyServingTeamChange(team: TeamId): void {
-    const engineServingTeam = this.engine.getState().servingTeam
-    this.servingTeamSwapped = team !== engineServingTeam
+    if (this.engine.correctServingTeam(team)) this.actionCount += 1
     const teamName = this.getPresentationDisplayState().teams[team].name
     this.message = `Service : ${teamName}.`
   }
