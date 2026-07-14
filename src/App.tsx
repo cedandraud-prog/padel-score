@@ -9,7 +9,10 @@ import { MatchSetup } from './ui/MatchSetup'
 import { InitialServerSelection } from './ui/InitialServerSelection'
 import { VoiceDiagnostics } from './ui/VoiceDiagnostics'
 import { SpeechRecognitionService } from './voice/SpeechRecognitionService'
-import { SpeechSynthesisService } from './voice/SpeechSynthesisService'
+import {
+  SpeechSynthesisService,
+  type SpeechVoiceOption,
+} from './voice/SpeechSynthesisService'
 import { CommandFeedbackService } from './voice/CommandFeedbackService'
 import { ReadinessCueService } from './voice/ReadinessCueService'
 import { ScreenWakeLockManager } from './application/ScreenWakeLockManager'
@@ -66,6 +69,13 @@ export default function App() {
       ),
   )
   const [synthesis] = useState(() => new SpeechSynthesisService())
+  const [announcementVoices, setAnnouncementVoices] = useState<
+    SpeechVoiceOption[]
+  >(() => synthesis.getVoiceOptions())
+  const [selectedAnnouncementVoiceId, setSelectedAnnouncementVoiceId] =
+    useState(() => synthesis.getSelectedVoiceId())
+  const [announcementVoiceTesting, setAnnouncementVoiceTesting] =
+    useState(false)
   const [controller, setController] = useState<MatchController | null>(null)
   const [snapshot, setSnapshot] = useState<MatchControllerSnapshot | null>(null)
   const [persistenceReady, setPersistenceReady] = useState(false)
@@ -124,6 +134,15 @@ export default function App() {
       lastReleaseReason: null,
       lastReleaseAt: null,
     })
+
+  useEffect(() => {
+    const refreshVoices = () => {
+      setAnnouncementVoices(synthesis.getVoiceOptions())
+      setSelectedAnnouncementVoiceId(synthesis.getSelectedVoiceId())
+    }
+    refreshVoices()
+    return synthesis.subscribeToVoiceChanges(refreshVoices)
+  }, [synthesis])
 
   useEffect(() => {
     let cancelled = false
@@ -657,6 +676,21 @@ export default function App() {
     }
   }
 
+  const selectAnnouncementVoice = (voiceId: string) => {
+    if (!synthesis.selectVoice(voiceId)) return
+    setSelectedAnnouncementVoiceId(synthesis.getSelectedVoiceId())
+  }
+
+  const previewAnnouncementVoice = async () => {
+    if (announcementVoiceTesting || !synthesis.isSupported) return
+    setAnnouncementVoiceTesting(true)
+    try {
+      await controller.previewAnnouncementVoice()
+    } finally {
+      setAnnouncementVoiceTesting(false)
+    }
+  }
+
   const changeTeams = () => {
     if (
       !window.confirm(
@@ -763,6 +797,12 @@ export default function App() {
               onPlayerPlusConfigurationChange={updatePlayerPlusConfiguration}
               onDictate={dictateSetupField}
               onCancelDictation={cancelSetupDictation}
+              announcementVoices={announcementVoices}
+              selectedAnnouncementVoiceId={selectedAnnouncementVoiceId}
+              announcementVoiceSupported={synthesis.isSupported}
+              announcementVoiceTesting={announcementVoiceTesting}
+              onAnnouncementVoiceChange={selectAnnouncementVoice}
+              onTestAnnouncementVoice={() => void previewAnnouncementVoice()}
               onStartPlayerMatch={startPlayerMatch}
               onStartPlayerPlusMatch={startPlayerPlusMatch}
             />
@@ -831,6 +871,7 @@ export default function App() {
           snapshot={snapshot}
           wakeLock={wakeLockSnapshot}
           synthesis={synthesis}
+          onTestAnnouncementVoice={() => controller.previewAnnouncementVoice()}
           onStrategyChange={(strategy) => {
             strategyStore.save(strategy)
             controller.setListeningStrategy(strategy)

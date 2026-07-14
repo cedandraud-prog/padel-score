@@ -5,6 +5,7 @@ import {
   createPlayerPlusConfigurationDraft,
   updatePlayerName,
 } from '../application/setupConfiguration'
+import { AUTOMATIC_VOICE_ID } from '../voice/SpeechSynthesisService'
 import { MatchSetup } from './MatchSetup'
 
 const callbacks = {
@@ -13,6 +14,22 @@ const callbacks = {
   onPlayerPlusConfigurationChange: () => undefined,
   onDictate: () => undefined,
   onCancelDictation: () => undefined,
+  announcementVoices: [
+    {
+      id: AUTOMATIC_VOICE_ID,
+      voiceURI: '',
+      name: 'Automatique',
+      lang: '',
+      isDefault: true,
+      isLocal: true,
+      isAutomatic: true,
+    },
+  ],
+  selectedAnnouncementVoiceId: AUTOMATIC_VOICE_ID,
+  announcementVoiceSupported: true,
+  announcementVoiceTesting: false,
+  onAnnouncementVoiceChange: () => undefined,
+  onTestAnnouncementVoice: () => undefined,
   onStartPlayerMatch: () => undefined,
   onStartPlayerPlusMatch: () => undefined,
 }
@@ -145,5 +162,61 @@ describe('MatchSetup', () => {
 
     expect(html).toContain('Les commandes de point doivent être différentes.')
     expect(html).toMatch(/setup-start-match[^>]*disabled/)
+  })
+
+  it('propose le réglage local de voix dans PLAYER et PLAYER+', () => {
+    const frenchVoice = {
+      id: 'voice-fr',
+      voiceURI: 'voice-fr',
+      name: 'Audrey',
+      lang: 'fr-FR',
+      isDefault: true,
+      isLocal: true,
+      isAutomatic: false,
+    }
+    const properties = {
+      ...callbacks,
+      announcementVoices: [callbacks.announcementVoices[0], frenchVoice],
+      selectedAnnouncementVoiceId: frenchVoice.id,
+    }
+
+    for (const mode of ['PLAYER', 'PLAYERS_PLUS'] as const) {
+      const html = renderToStaticMarkup(
+        <MatchSetup
+          {...properties}
+          message=""
+          mode={mode}
+          configuration={createDefaultMatchConfiguration()}
+          playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
+          microphoneStatus="inactive"
+          dictationField={null}
+        />,
+      )
+
+      expect(html).toContain('Voix des annonces')
+      expect(html).toContain('Automatique — voix française par défaut')
+      expect(html).toContain('Audrey — fr-FR')
+      expect(html).toContain('value="voice-fr" selected=""')
+      expect(html).toContain('>Écouter</button>')
+    }
+  })
+
+  it('reste démarrable lorsque la synthèse vocale est indisponible', () => {
+    const html = renderToStaticMarkup(
+      <MatchSetup
+        {...callbacks}
+        announcementVoiceSupported={false}
+        message=""
+        mode="PLAYER"
+        configuration={createDefaultMatchConfiguration()}
+        playerPlusConfiguration={createPlayerPlusConfigurationDraft()}
+        microphoneStatus="inactive"
+        dictationField={null}
+      />,
+    )
+
+    expect(html).toMatch(/announcement-voice-choice[\s\S]*?<select disabled=""/)
+    expect(html).toMatch(/announcement-voice-preview[^>]*disabled/)
+    expect(html.match(/setup-start-match primary[^>]*disabled/g)).toBeNull()
   })
 })

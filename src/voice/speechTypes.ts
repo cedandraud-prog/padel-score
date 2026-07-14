@@ -1,4 +1,6 @@
 export const MINIMUM_RECOGNITION_CONFIDENCE = 0.65
+export const ANNOUNCEMENT_VOICE_TEST_PHRASE =
+  'Quinze zéro. Équipe 1 au service.'
 
 export type VoiceErrorCode =
   | 'not-allowed'

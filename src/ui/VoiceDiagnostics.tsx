@@ -8,6 +8,7 @@ interface VoiceDiagnosticsProps {
   snapshot: MatchControllerSnapshot
   wakeLock: ScreenWakeLockSnapshot
   synthesis: SpeechSynthesisService
+  onTestAnnouncementVoice(): Promise<void>
   onStrategyChange(strategy: ListeningStrategy): void
   onReset(): void
 }
@@ -40,37 +41,40 @@ const wakeLockReleaseLabels = {
 interface VoiceSettingsDiagnosticProps {
   synthesis: SpeechSynthesisService
   announcementInProgress?: boolean
+  onTestAnnouncementVoice?: () => Promise<void>
 }
 
 export function VoiceSettingsDiagnostic({
   synthesis,
   announcementInProgress = false,
+  onTestAnnouncementVoice,
 }: VoiceSettingsDiagnosticProps) {
-  const [voices, setVoices] = useState(() => synthesis.getFrenchVoices())
+  const [voices, setVoices] = useState(() => synthesis.getVoiceOptions())
   const [message, setMessage] = useState('')
+  const selectedVoiceId = synthesis.getSelectedVoiceId()
   const currentVoice = synthesis.getCurrentVoice()
 
   useEffect(
     () =>
       synthesis.subscribeToVoiceChanges(() => {
-        setVoices(synthesis.getFrenchVoices())
+        setVoices(synthesis.getVoiceOptions())
       }),
     [synthesis],
   )
 
   const selectVoice = (id: string) => {
-    const saved = synthesis.selectVoice(id || null)
-    setVoices(synthesis.getFrenchVoices())
+    const saved = synthesis.selectVoice(id)
+    setVoices(synthesis.getVoiceOptions())
     setMessage(
       saved ? 'Choix mémorisé sur cet appareil.' : 'Choix non mémorisé.',
     )
   }
 
   const testCurrentVoice = async () => {
-    if (!currentVoice) return
     setMessage('Test en cours…')
     try {
-      await synthesis.testVoice(currentVoice.id)
+      await (onTestAnnouncementVoice?.() ??
+        synthesis.testVoice(selectedVoiceId))
       setMessage('Test terminé.')
     } catch {
       setMessage('Impossible de tester cette voix.')
@@ -88,13 +92,14 @@ export function VoiceSettingsDiagnostic({
           <label>
             Voix française utilisée
             <select
-              value={currentVoice?.id ?? ''}
+              value={selectedVoiceId}
               onChange={(event) => selectVoice(event.target.value)}
             >
               {voices.map((voice) => (
                 <option value={voice.id} key={voice.id}>
-                  {voice.name} ({voice.lang})
-                  {voice.isDefault ? ' — par défaut' : ''}
+                  {voice.isAutomatic
+                    ? 'Automatique — voix française par défaut'
+                    : `${voice.name} — ${voice.lang}`}
                 </option>
               ))}
             </select>
@@ -125,6 +130,7 @@ export function VoiceDiagnostics({
   snapshot,
   wakeLock,
   synthesis,
+  onTestAnnouncementVoice,
   onStrategyChange,
   onReset,
 }: VoiceDiagnosticsProps) {
@@ -162,6 +168,7 @@ export function VoiceDiagnostics({
       <VoiceSettingsDiagnostic
         synthesis={synthesis}
         announcementInProgress={snapshot.microphoneStatus === 'speaking'}
+        onTestAnnouncementVoice={onTestAnnouncementVoice}
       />
       <p>
         Connexion Chrome : <strong>{connection.quality}</strong>

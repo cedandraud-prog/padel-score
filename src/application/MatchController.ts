@@ -20,6 +20,7 @@ import type {
   SynthesisAdapter,
 } from '../voice/speechTypes'
 import {
+  ANNOUNCEMENT_VOICE_TEST_PHRASE,
   MINIMUM_RECOGNITION_CONFIDENCE,
   usableRecognitionConfidence,
 } from '../voice/speechTypes'
@@ -1101,6 +1102,18 @@ export class MatchController {
         display: this.getPresentationDisplayState(),
       }),
     )
+  }
+
+  async previewAnnouncementVoice(): Promise<void> {
+    const conversationWasRunning = this.conversation.getSnapshot().isRunning
+    const previousMicrophoneStatus = this.microphoneStatus
+    const previousMessage = this.message
+    await this.announce(ANNOUNCEMENT_VOICE_TEST_PHRASE)
+    if (!conversationWasRunning) {
+      this.microphoneStatus = previousMicrophoneStatus
+      this.message = previousMessage
+      this.emit()
+    }
   }
 
   async enterCorrection(): Promise<void> {

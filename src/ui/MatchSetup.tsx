@@ -16,6 +16,7 @@ import {
 } from '../application/setupConfiguration'
 import type { PlayerId } from '../core/playerPlusService'
 import type { FeedbackMode } from '../voice/speechTypes'
+import type { SpeechVoiceOption } from '../voice/SpeechSynthesisService'
 import {
   ArrowLeftRightIcon,
   MicrophoneIcon,
@@ -40,6 +41,12 @@ interface MatchSetupProps {
   ): void
   onDictate(field: SetupDictationField): void
   onCancelDictation(): void
+  announcementVoices: readonly SpeechVoiceOption[]
+  selectedAnnouncementVoiceId: string
+  announcementVoiceSupported: boolean
+  announcementVoiceTesting: boolean
+  onAnnouncementVoiceChange(voiceId: string): void
+  onTestAnnouncementVoice(): void
   onStartPlayerMatch(feedbackMode: FeedbackMode): void
   onStartPlayerPlusMatch(feedbackMode: FeedbackMode): void
 }
@@ -58,6 +65,12 @@ export function MatchSetup({
   onPlayerPlusConfigurationChange,
   onDictate,
   onCancelDictation,
+  announcementVoices,
+  selectedAnnouncementVoiceId,
+  announcementVoiceSupported,
+  announcementVoiceTesting,
+  onAnnouncementVoiceChange,
+  onTestAnnouncementVoice,
   onStartPlayerMatch,
   onStartPlayerPlusMatch,
 }: MatchSetupProps) {
@@ -366,7 +379,7 @@ export function MatchSetup({
         </p>
       )}
       <footer className="quick-setup-footer">
-        <div>
+        <div className="setup-preferences">
           {(mode === 'PLAYER' ? playerReady : playerPlusReady) && (
             <p className="configuration-ready" role="status">
               <span aria-hidden="true" /> Configuration prête
@@ -385,6 +398,34 @@ export function MatchSetup({
               <option value="NONE">Aucun</option>
             </select>
           </label>
+          <div className="announcement-voice-choice">
+            <label>
+              <span>Voix des annonces</span>
+              <select
+                value={selectedAnnouncementVoiceId}
+                disabled={!announcementVoiceSupported}
+                onChange={(event) =>
+                  onAnnouncementVoiceChange(event.target.value)
+                }
+              >
+                {announcementVoices.map((voice) => (
+                  <option value={voice.id} key={voice.id}>
+                    {voice.isAutomatic
+                      ? 'Automatique — voix française par défaut'
+                      : `${voice.name} — ${voice.lang}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="announcement-voice-preview"
+              type="button"
+              disabled={!announcementVoiceSupported || announcementVoiceTesting}
+              onClick={onTestAnnouncementVoice}
+            >
+              {announcementVoiceTesting ? 'Écoute…' : 'Écouter'}
+            </button>
+          </div>
         </div>
         <button
           className="setup-start-match primary"

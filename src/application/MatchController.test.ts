@@ -8,6 +8,7 @@ import type {
   SynthesisLifecycle,
   SynthesisAdapter,
 } from '../voice/speechTypes'
+import { ANNOUNCEMENT_VOICE_TEST_PHRASE } from '../voice/speechTypes'
 import { announcementSafetyTimeoutMs, MatchController } from './MatchController'
 import {
   createDefaultMatchConfiguration,
@@ -1882,6 +1883,61 @@ describe('MatchController sortie robuste des annonces', () => {
     await Promise.all([initialSetup, restart])
 
     expect(recognition.startCount).toBe(1)
+  })
+})
+
+describe('MatchController test de la voix des annonces', () => {
+  it('suspend l’écoute, ignore un résultat pendant la synthèse puis reprend', async () => {
+    const recognition = new MockRecognition()
+    const synthesis = new LifecycleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+    controller.startMatch({
+      configuration: matchConfiguration('Lynx', 'Orques'),
+    })
+    await flushAsyncWork()
+    const listeningHandlers = recognition.handlers
+    const initialStarts = recognition.startCount
+    const initialStops = recognition.stopCount
+
+    const preview = controller.previewAnnouncementVoice()
+    await flushAsyncWork()
+
+    expect(synthesis.spoken.at(-1)).toBe(ANNOUNCEMENT_VOICE_TEST_PHRASE)
+    expect(recognition.stopCount).toBeGreaterThan(initialStops)
+    expect(controller.getSnapshot().microphoneStatus).toBe('speaking')
+
+    listeningHandlers?.onResult({ transcript: 'Lynx' })
+    await flushAsyncWork()
+    expect(controller.getSnapshot().display.teams.A.points).toBe('0')
+
+    synthesis.finishSpeech()
+    await preview
+    await flushAsyncWork()
+
+    expect(recognition.startCount).toBe(initialStarts + 1)
+    expect(controller.getSnapshot().conversation.isRunning).toBe(true)
+  })
+
+  it('laisse volontairement inactive une écoute qui était inactive', async () => {
+    const recognition = new MockRecognition()
+    const synthesis = new LifecycleSynthesis()
+    const controller = new MatchController(recognition, synthesis)
+    controller.startMatch({
+      configuration: matchConfiguration('Lynx', 'Orques'),
+    })
+    await flushAsyncWork()
+    controller.disableListening()
+    const initialStarts = recognition.startCount
+
+    const preview = controller.previewAnnouncementVoice()
+    await flushAsyncWork()
+    synthesis.finishSpeech()
+    await preview
+    await flushAsyncWork()
+
+    expect(recognition.startCount).toBe(initialStarts)
+    expect(controller.getSnapshot().conversation.isRunning).toBe(false)
+    expect(controller.getSnapshot().microphoneStatus).toBe('disabled')
   })
 })
 

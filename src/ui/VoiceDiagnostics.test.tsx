@@ -144,6 +144,7 @@ describe('VoiceSettingsDiagnostic', () => {
         snapshot={snapshot}
         wakeLock={wakeLock}
         synthesis={new SpeechSynthesisService(null, null, null)}
+        onTestAnnouncementVoice={async () => undefined}
         onStrategyChange={() => undefined}
         onReset={() => undefined}
       />,

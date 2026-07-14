@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SpeechSynthesisService } from './SpeechSynthesisService'
+import {
+  AUTOMATIC_VOICE_ID,
+  SpeechSynthesisService,
+} from './SpeechSynthesisService'
+import { ANNOUNCEMENT_VOICE_TEST_PHRASE } from './speechTypes'
 
 function voice(
   name: string,
@@ -16,12 +20,16 @@ function voice(
   }
 }
 
-function createHarness() {
-  const voices = [
+function createHarness(
+  initialVoices: SpeechSynthesisVoice[] = [
     voice('English', 'en-US', 'english'),
+    voice('Français Canada', 'fr-CA', 'french-ca'),
+    voice('Français B', 'fr-FR', 'french-b'),
     voice('Français A', 'fr-FR', 'french-a', true),
-    voice('Français B', 'fr-CA', 'french-b'),
-  ]
+    voice('Doublon ignoré', 'fr-FR', 'french-b'),
+  ],
+) {
+  let voices = initialVoices
   const values = new Map<string, string>()
   const storage = {
     getItem: (key: string) => values.get(key) ?? null,
@@ -29,6 +37,7 @@ function createHarness() {
     removeItem: (key: string) => values.delete(key),
   }
   const utterances: SpeechSynthesisUtterance[] = []
+  const voiceListeners = new Set<() => void>()
   const synthesis = {
     getVoices: () => voices,
     cancel: vi.fn(),
@@ -37,8 +46,12 @@ function createHarness() {
       utterance.onstart?.({} as SpeechSynthesisEvent)
       utterance.onend?.({} as SpeechSynthesisEvent)
     }),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
+    addEventListener: vi.fn((event: string, listener: () => void) => {
+      if (event === 'voiceschanged') voiceListeners.add(listener)
+    }),
+    removeEventListener: vi.fn((event: string, listener: () => void) => {
+      if (event === 'voiceschanged') voiceListeners.delete(listener)
+    }),
   } as unknown as SpeechSynthesis
   const utteranceFactory = (text: string) =>
     ({ text, lang: '', voice: null }) as SpeechSynthesisUtterance
@@ -47,51 +60,132 @@ function createHarness() {
     storage,
     utteranceFactory,
   )
-  return { service, storage, synthesis, utterances }
+  return {
+    service,
+    storage,
+    synthesis,
+    utteranceFactory,
+    utterances,
+    values,
+    setVoices(next: SpeechSynthesisVoice[]) {
+      voices = next
+    },
+    emitVoicesChanged() {
+      voiceListeners.forEach((listener) => listener())
+    },
+  }
 }
 
 describe('SpeechSynthesisService', () => {
-  it('inventorie uniquement les voix françaises disponibles', () => {
+  it('ajoute Automatique, filtre, déduplique et trie les voix françaises', () => {
     const { service } = createHarness()
-    expect(service.getFrenchVoices()).toEqual([
-      {
-        id: 'french-a',
-        name: 'Français A',
-        lang: 'fr-FR',
-        isDefault: true,
-        isLocal: true,
-      },
-      {
-        id: 'french-b',
-        name: 'Français B',
-        lang: 'fr-CA',
-        isDefault: false,
-        isLocal: true,
-      },
+
+    expect(service.getVoiceOptions().map(({ id }) => id)).toEqual([
+      AUTOMATIC_VOICE_ID,
+      'french-a',
+      'french-b',
+      'french-ca',
     ])
+    expect(service.getVoiceOptions()[0]).toMatchObject({
+      name: 'Automatique',
+      isAutomatic: true,
+    })
   })
 
-  it('mémorise une voix française et l’utilise pour les annonces', async () => {
-    const { service, utterances } = createHarness()
+  it('charge une liste initialement vide à la réception de voiceschanged', () => {
+    const harness = createHarness([])
+    const listener = vi.fn()
+    const unsubscribe = harness.service.subscribeToVoiceChanges(listener)
+
+    expect(harness.service.getVoiceOptions()).toHaveLength(1)
+    harness.setVoices([voice('Français A', 'fr-FR', 'french-a', true)])
+    harness.emitVoicesChanged()
+
+    expect(listener).toHaveBeenCalledOnce()
+    expect(harness.service.getVoiceOptions()).toHaveLength(2)
+    unsubscribe()
+    harness.emitVoicesChanged()
+    expect(listener).toHaveBeenCalledOnce()
+  })
+
+  it('mémorise voiceURI, name et lang puis utilise cette voix partout', async () => {
+    const { service, utterances, values } = createHarness()
     expect(service.selectVoice('french-b')).toBe(true)
 
     await service.speak('Nouveau score')
+    await service.speak('Confirmation')
 
-    expect(service.getCurrentVoice()?.id).toBe('french-b')
-    expect(utterances[0].voice?.voiceURI).toBe('french-b')
+    expect(JSON.parse([...values.values()][0])).toEqual({
+      voiceURI: 'french-b',
+      name: 'Français B',
+      lang: 'fr-FR',
+    })
+    expect(utterances.map((utterance) => utterance.voice?.voiceURI)).toEqual([
+      'french-b',
+      'french-b',
+    ])
+  })
+
+  it('restaure la préférence après actualisation', async () => {
+    const harness = createHarness()
+    harness.service.selectVoice('french-b')
+    const restoredService = new SpeechSynthesisService(
+      harness.synthesis,
+      harness.storage,
+      harness.utteranceFactory,
+    )
+
+    expect(restoredService.getSelectedVoiceId()).toBe('french-b')
+    await restoredService.speak('Score après actualisation')
+    expect(harness.utterances.at(-1)?.voice?.voiceURI).toBe('french-b')
+  })
+
+  it('restaure la voix par name + lang lorsque voiceURI a changé', async () => {
+    const harness = createHarness()
+    harness.service.selectVoice('french-b')
+    harness.setVoices([
+      voice('Français A', 'fr-FR', 'french-a', true),
+      voice('Français B', 'fr-FR', 'french-b-new'),
+    ])
+
+    expect(harness.service.getSelectedVoiceId()).toBe('french-b-new')
+    await harness.service.speak('Score')
+    expect(harness.utterances[0].voice?.voiceURI).toBe('french-b-new')
+  })
+
+  it('revient silencieusement à Automatique si la voix disparaît', async () => {
+    const harness = createHarness()
+    harness.service.selectVoice('french-b')
+    harness.setVoices([voice('Français A', 'fr-FR', 'french-a', true)])
+
+    expect(harness.service.getSelectedVoiceId()).toBe(AUTOMATIC_VOICE_ID)
+    await harness.service.speak('Score')
+    expect(harness.utterances[0].voice?.voiceURI).toBe('french-a')
+  })
+
+  it('permet de revenir explicitement à Automatique', () => {
+    const { service, values } = createHarness()
+    service.selectVoice('french-b')
+
+    expect(service.selectVoice(AUTOMATIC_VOICE_ID)).toBe(true)
+    expect(values.size).toBe(0)
+    expect(service.getSelectedVoiceId()).toBe(AUTOMATIC_VOICE_ID)
   })
 
   it('refuse de sélectionner une voix non française ou inconnue', () => {
     const { service } = createHarness()
     expect(service.selectVoice('english')).toBe(false)
     expect(service.selectVoice('inconnue')).toBe(false)
-    expect(service.getCurrentVoice()?.id).toBe('french-a')
+    expect(service.getSelectedVoiceId()).toBe(AUTOMATIC_VOICE_ID)
   })
 
-  it('permet de tester la voix choisie', async () => {
+  it('prononce la phrase de test avec la voix sélectionnée', async () => {
     const { service, utterances } = createHarness()
-    await service.testVoice('french-b')
-    expect(utterances[0].text).toBe('Test de la voix PADEL SCORE.')
+    service.selectVoice('french-b')
+
+    await service.testVoice()
+
+    expect(utterances[0].text).toBe(ANNOUNCEMENT_VOICE_TEST_PHRASE)
     expect(utterances[0].voice?.voiceURI).toBe('french-b')
   })
 
@@ -105,5 +199,15 @@ describe('SpeechSynthesisService', () => {
     })
 
     expect(events).toEqual(['started', 'ended'])
+  })
+
+  it('reste non bloquant lorsque la synthèse est indisponible', async () => {
+    const service = new SpeechSynthesisService(null, null, null)
+
+    expect(service.isSupported).toBe(false)
+    expect(service.getVoiceOptions()).toHaveLength(1)
+    await expect(service.speak('Score')).rejects.toThrow(
+      'Synthèse vocale indisponible',
+    )
   })
 })

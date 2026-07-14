@@ -1,16 +1,26 @@
 import type { SynthesisAdapter, SynthesisLifecycle } from './speechTypes'
+import { ANNOUNCEMENT_VOICE_TEST_PHRASE } from './speechTypes'
 
 const VOICE_STORAGE_KEY = 'padel-score.speech-voice'
+export const AUTOMATIC_VOICE_ID = 'automatic'
 
 type VoiceStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type UtteranceFactory = (text: string) => SpeechSynthesisUtterance
 
 export interface SpeechVoiceOption {
   id: string
+  voiceURI: string
   name: string
   lang: string
   isDefault: boolean
   isLocal: boolean
+  isAutomatic: boolean
+}
+
+interface StoredVoicePreference {
+  voiceURI: string
+  name: string
+  lang: string
 }
 
 function browserSynthesis(): SpeechSynthesis | null {
@@ -40,11 +50,23 @@ function voiceId(voice: SpeechSynthesisVoice): string {
 function toOption(voice: SpeechSynthesisVoice): SpeechVoiceOption {
   return {
     id: voiceId(voice),
+    voiceURI: voice.voiceURI,
     name: voice.name,
     lang: voice.lang,
     isDefault: voice.default,
     isLocal: voice.localService,
+    isAutomatic: false,
   }
+}
+
+const AUTOMATIC_VOICE_OPTION: SpeechVoiceOption = {
+  id: AUTOMATIC_VOICE_ID,
+  voiceURI: '',
+  name: 'Automatique',
+  lang: '',
+  isDefault: true,
+  isLocal: true,
+  isAutomatic: true,
 }
 
 export class SpeechSynthesisService implements SynthesisAdapter {
@@ -63,22 +85,46 @@ export class SpeechSynthesisService implements SynthesisAdapter {
     return this.frenchBrowserVoices().map(toOption)
   }
 
+  getVoiceOptions(): SpeechVoiceOption[] {
+    return [AUTOMATIC_VOICE_OPTION, ...this.getFrenchVoices()]
+  }
+
+  getSelectedVoiceId(): string {
+    const selected = this.resolveStoredVoice()
+    return selected ? voiceId(selected) : AUTOMATIC_VOICE_ID
+  }
+
   getCurrentVoice(): SpeechVoiceOption | null {
     const voice = this.resolveVoice()
     return voice ? toOption(voice) : null
   }
 
-  selectVoice(id: string | null): boolean {
-    if (
-      id !== null &&
-      !this.frenchBrowserVoices().some((voice) => voiceId(voice) === id)
-    ) {
+  selectVoice(id: string): boolean {
+    if (id === AUTOMATIC_VOICE_ID) {
+      try {
+        this.storage?.removeItem(VOICE_STORAGE_KEY)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    const selected = this.frenchBrowserVoices().find(
+      (voice) => voiceId(voice) === id,
+    )
+    if (!selected) {
       return false
     }
 
     try {
-      if (id === null) this.storage?.removeItem(VOICE_STORAGE_KEY)
-      else this.storage?.setItem(VOICE_STORAGE_KEY, id)
+      this.storage?.setItem(
+        VOICE_STORAGE_KEY,
+        JSON.stringify({
+          voiceURI: selected.voiceURI,
+          name: selected.name,
+          lang: selected.lang,
+        } satisfies StoredVoicePreference),
+      )
       return true
     } catch {
       return false
@@ -95,14 +141,17 @@ export class SpeechSynthesisService implements SynthesisAdapter {
     return this.speakWithVoice(text, this.resolveVoice(), lifecycle)
   }
 
-  testVoice(id: string): Promise<void> {
-    const voice = this.frenchBrowserVoices().find(
-      (candidate) => voiceId(candidate) === id,
-    )
-    if (!voice) {
+  testVoice(id = this.getSelectedVoiceId()): Promise<void> {
+    const voice =
+      id === AUTOMATIC_VOICE_ID
+        ? this.defaultFrenchVoice()
+        : (this.frenchBrowserVoices().find(
+            (candidate) => voiceId(candidate) === id,
+          ) ?? null)
+    if (id !== AUTOMATIC_VOICE_ID && !voice) {
       return Promise.reject(new Error('Voix française indisponible.'))
     }
-    return this.speakWithVoice('Test de la voix PADEL SCORE.', voice)
+    return this.speakWithVoice(ANNOUNCEMENT_VOICE_TEST_PHRASE, voice)
   }
 
   cancel(): void {
@@ -111,28 +160,71 @@ export class SpeechSynthesisService implements SynthesisAdapter {
   }
 
   private frenchBrowserVoices(): SpeechSynthesisVoice[] {
-    return (
+    const voices =
       this.synthesis
         ?.getVoices()
         .filter((voice) => voice.lang.toLocaleLowerCase().startsWith('fr')) ??
       []
-    )
+    const unique = new Map<string, SpeechSynthesisVoice>()
+    for (const voice of voices) {
+      const key = voice.voiceURI || `${voice.name}|${voice.lang}`
+      const current = unique.get(key)
+      if (!current || (!current.default && voice.default))
+        unique.set(key, voice)
+    }
+    return [...unique.values()].sort((left, right) => {
+      const group = (voice: SpeechSynthesisVoice) =>
+        voice.default ? 0 : voice.lang.toLocaleLowerCase() === 'fr-fr' ? 1 : 2
+      return (
+        group(left) - group(right) ||
+        left.name.localeCompare(right.name, 'fr', { sensitivity: 'base' })
+      )
+    })
   }
 
-  private selectedVoiceId(): string | null {
+  private storedPreference(): StoredVoicePreference | null {
     try {
-      return this.storage?.getItem(VOICE_STORAGE_KEY) ?? null
+      const stored = this.storage?.getItem(VOICE_STORAGE_KEY)
+      if (!stored) return null
+      try {
+        const parsed = JSON.parse(stored) as Partial<StoredVoicePreference>
+        return typeof parsed.voiceURI === 'string' &&
+          typeof parsed.name === 'string' &&
+          typeof parsed.lang === 'string'
+          ? {
+              voiceURI: parsed.voiceURI,
+              name: parsed.name,
+              lang: parsed.lang,
+            }
+          : null
+      } catch {
+        return { voiceURI: stored, name: '', lang: '' }
+      }
     } catch {
       return null
     }
   }
 
-  private resolveVoice(): SpeechSynthesisVoice | null {
+  private resolveStoredVoice(): SpeechSynthesisVoice | null {
     const voices = this.frenchBrowserVoices()
-    const selected = this.selectedVoiceId()
+    const preference = this.storedPreference()
+    if (!preference) return null
     return (
-      voices.find((voice) => voiceId(voice) === selected) ?? voices[0] ?? null
+      voices.find((voice) => voice.voiceURI === preference.voiceURI) ??
+      voices.find(
+        (voice) =>
+          voice.name === preference.name && voice.lang === preference.lang,
+      ) ??
+      null
     )
+  }
+
+  private defaultFrenchVoice(): SpeechSynthesisVoice | null {
+    return this.frenchBrowserVoices()[0] ?? null
+  }
+
+  private resolveVoice(): SpeechSynthesisVoice | null {
+    return this.resolveStoredVoice() ?? this.defaultFrenchVoice()
   }
 
   private speakWithVoice(
