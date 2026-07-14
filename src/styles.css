@@ -2414,6 +2414,151 @@ input::placeholder {
   }
 }
 
+/* TASK-022 final correction — consistent match action grid. */
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  border-color: var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+  background: var(--color-surface);
+}
+
+.controls .control-button {
+  display: inline-flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.7rem;
+  padding: 0.65rem 0.75rem;
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  font-size: 0.9rem;
+  font-weight: 680;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.controls .control-button:hover:not(:disabled) {
+  border-color: rgb(250 247 242 / 34%);
+  background: var(--color-surface-soft);
+}
+
+.controls .control-button:active:not(:disabled) {
+  border-color: rgb(250 247 242 / 42%);
+  background: #343842;
+  transform: translateY(1px);
+}
+
+.controls .control-button:focus-visible {
+  border-color: var(--color-accent);
+  outline: 0;
+  box-shadow: var(--focus-ring);
+}
+
+.controls .control-button:disabled {
+  border-color: rgb(250 247 242 / 8%);
+  color: var(--color-text-subtle);
+  background: #1b1e24;
+  opacity: 0.48;
+}
+
+.controls .control-button--point {
+  border-color: rgb(250 247 242 / 28%);
+  background: #292d36;
+  font-weight: 780;
+}
+
+.controls .control-button--secondary {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+
+.controls .control-button--listening,
+.controls .control-button--listening-active {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+  background: transparent;
+}
+
+.controls .control-button--listening-active:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+}
+
+.controls .control-button--finish {
+  grid-column: 1 / -1;
+  border-color: rgb(255 141 147 / 62%);
+  color: var(--color-danger);
+  background: rgb(255 141 147 / 6%);
+}
+
+.controls .control-button--finish:hover:not(:disabled),
+.controls .control-button--finish:active:not(:disabled) {
+  border-color: var(--color-danger);
+  color: #ffd5d7;
+  background: rgb(255 141 147 / 12%);
+}
+
+.finish-confirmation {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 0.7rem;
+  border: 1px solid rgb(255 141 147 / 48%);
+  border-radius: 0.8rem;
+  padding: 0.8rem;
+  background: rgb(255 141 147 / 5%);
+}
+
+.finish-confirmation p {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+  font-weight: 720;
+  text-align: center;
+}
+
+.finish-confirmation > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.controls .control-button--confirm-finish {
+  border-color: var(--color-danger);
+  color: #ffd5d7;
+  background: rgb(255 141 147 / 14%);
+}
+
+.controls .control-button--confirm-finish:hover:not(:disabled),
+.controls .control-button--confirm-finish:active:not(:disabled) {
+  color: #fff;
+  background: rgb(255 141 147 / 22%);
+}
+
+@media (max-width: 390px) {
+  .controls {
+    gap: 0.55rem;
+    padding: 0.65rem;
+  }
+
+  .controls .control-button {
+    min-height: 3.1rem;
+    padding-inline: 0.5rem;
+    font-size: 0.82rem;
+  }
+
+  .finish-confirmation > div {
+    gap: 0.55rem;
+  }
+}
+
 /* TASK-022 correction — MatchSetup follows the validated mobile reference. */
 
 body {

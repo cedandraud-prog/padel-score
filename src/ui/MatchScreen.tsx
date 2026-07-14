@@ -22,6 +22,9 @@ interface MatchScreenProps {
   onRequestPlayerServerCorrection?(): void
   onSelectPlayerServer?(playerId: PlayerId): void
   onCancelPlayerServerSelection?(): void
+  onRequestSessionFinish?(): void
+  onConfirmSessionFinish?(): void
+  onCancelSessionFinish?(): void
 }
 
 export const MATCH_VOICE_COMMAND_HELP = [
@@ -80,6 +83,9 @@ export function MatchScreen({
   onRequestPlayerServerCorrection,
   onSelectPlayerServer,
   onCancelPlayerServerSelection,
+  onRequestSessionFinish = () => undefined,
+  onConfirmSessionFinish = () => undefined,
+  onCancelSessionFinish = () => undefined,
 }: MatchScreenProps) {
   const [editingCommand, setEditingCommand] = useState<TeamId | null>(null)
   const [commandDraft, setCommandDraft] = useState('')
@@ -89,6 +95,8 @@ export function MatchScreen({
   const microphoneClass = `microphone microphone--${snapshot.microphoneStatus}`
   const nextServer = A.isServing ? A : B
   const isPlayerPlus = snapshot.configuration?.mode === 'PLAYERS_PLUS'
+  const finishConfirmationPending =
+    snapshot.phase === 'session-end-confirmation'
   const playerServerName = snapshot.currentPlayerServer?.name
   const selection = snapshot.playerServerSelection
   const duplicateChoiceNames = selection
@@ -331,65 +339,122 @@ export function MatchScreen({
 
       <section className="controls" aria-label="Commandes de secours">
         <button
-          className="control-point"
+          className="control-button control-button--point"
           type="button"
           onClick={() => onPoint('A')}
           disabled={snapshot.phase !== 'match'}
         >
           Point équipe A
         </button>
-        {snapshot.session.state === 'IN_PROGRESS' && (
-          <button
-            className="control-secondary"
-            type="button"
-            onClick={onChangeTeams}
-          >
-            Changer les équipes
-          </button>
-        )}
         <button
-          className="control-point"
+          className="control-button control-button--point"
           type="button"
           onClick={() => onPoint('B')}
           disabled={snapshot.phase !== 'match'}
         >
           Point équipe B
         </button>
-        <button className="control-action" type="button" onClick={onUndo}>
+        {snapshot.session.state === 'IN_PROGRESS' && (
+          <button
+            className="control-button control-button--secondary"
+            type="button"
+            onClick={onChangeTeams}
+            disabled={finishConfirmationPending}
+          >
+            Changer les équipes
+          </button>
+        )}
+        <button
+          className="control-button control-button--secondary"
+          type="button"
+          onClick={onUndo}
+          disabled={finishConfirmationPending}
+        >
           Annuler
         </button>
-        <button className="control-action" type="button" onClick={onScore}>
+        <button
+          className="control-button control-button--secondary"
+          type="button"
+          onClick={onScore}
+          disabled={finishConfirmationPending}
+        >
           Score
         </button>
         <button
-          className="control-secondary"
+          className="control-button control-button--secondary"
           type="button"
           onClick={onFullScore}
+          disabled={finishConfirmationPending}
         >
           Score complet
         </button>
-        <button className="control-action" type="button" onClick={onCorrect}>
+        <button
+          className="control-button control-button--secondary"
+          type="button"
+          onClick={onCorrect}
+          disabled={finishConfirmationPending}
+        >
           Corriger
         </button>
         {isPlayerPlus && (
           <button
-            className="control-secondary"
+            className="control-button control-button--secondary"
             type="button"
             onClick={onRequestPlayerServerCorrection}
+            disabled={finishConfirmationPending}
           >
             Serveur
           </button>
         )}
         <button
-          className={`control-listening${listening ? ' control-listening--active' : ''}`}
+          className={`control-button control-button--listening${listening ? ' control-button--listening-active' : ''}`}
           type="button"
           onClick={onToggleListening}
-          disabled={!snapshot.recognitionAvailable}
+          disabled={!snapshot.recognitionAvailable || finishConfirmationPending}
         >
           {listening ? 'Désactiver l’écoute' : 'Réactiver l’écoute'}
         </button>
+        {snapshot.session.state === 'IN_PROGRESS' &&
+          !finishConfirmationPending && (
+            <button
+              className="control-button control-button--finish"
+              type="button"
+              onClick={onRequestSessionFinish}
+            >
+              Fin de match
+            </button>
+          )}
+        {finishConfirmationPending && (
+          <div
+            className="finish-confirmation"
+            role="group"
+            aria-labelledby="finish-confirmation-title"
+          >
+            <p id="finish-confirmation-title">Confirmer la fin du match ?</p>
+            <div>
+              <button
+                className="control-button control-button--secondary"
+                type="button"
+                onClick={onCancelSessionFinish}
+              >
+                Non
+              </button>
+              <button
+                className="control-button control-button--confirm-finish"
+                type="button"
+                onClick={onConfirmSessionFinish}
+              >
+                Oui, terminer
+              </button>
+            </div>
+          </div>
+        )}
         {snapshot.phase === 'session-finished' && (
-          <button type="button" className="primary" onClick={onNewMatch}>
+          <button
+            type="button"
+            className="control-button primary"
+            onClick={onNewMatch}
+          >
             Nouveau match
           </button>
         )}

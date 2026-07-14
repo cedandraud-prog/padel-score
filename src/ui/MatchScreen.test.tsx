@@ -80,7 +80,35 @@ describe('MatchScreen', () => {
     expect(html).toContain('Commande : Rouge')
     expect(html).toContain('Commande : Bleu')
     expect(html).toContain('Changer les équipes')
+    expect(html).toMatch(
+      /class="control-button control-button--finish"[^>]*>Fin de match<\/button>/,
+    )
     expect(html).not.toContain('Recommencer')
+  })
+
+  it('affiche une confirmation manuelle sans clôturer au premier appui', () => {
+    const html = renderToStaticMarkup(
+      <MatchScreen
+        snapshot={{ ...snapshot, phase: 'session-end-confirmation' }}
+        onPoint={() => undefined}
+        onUndo={() => undefined}
+        onScore={() => undefined}
+        onFullScore={() => undefined}
+        onCorrect={() => undefined}
+        onToggleListening={() => undefined}
+        onNewMatch={() => undefined}
+        onDisplayNameChange={() => undefined}
+        onServingTeamChange={() => undefined}
+      />,
+    )
+
+    expect(html).toContain('Confirmer la fin du match ?')
+    expect(html).toContain('>Non</button>')
+    expect(html).toContain('>Oui, terminer</button>')
+    expect(html).not.toContain('control-button--finish')
+    expect(html).toMatch(/Point équipe A<\/button>/)
+    expect(html).toMatch(/Point équipe B<\/button>/)
+    expect(html).toMatch(/disabled=""[^>]*>Point équipe A/)
   })
 
   it('rend les points, jeux, sets et le serveur immédiatement lisibles', () => {

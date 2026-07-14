@@ -756,6 +756,15 @@ export default function App() {
             onCancelPlayerServerSelection={() =>
               controller.cancelPlayerServerSelection()
             }
+            onRequestSessionFinish={() =>
+              void controller.handleTranscript({ transcript: 'Fin de match' })
+            }
+            onConfirmSessionFinish={() =>
+              void controller.handleTranscript({ transcript: 'Oui' })
+            }
+            onCancelSessionFinish={() =>
+              void controller.handleTranscript({ transcript: 'Non' })
+            }
           />
           {snapshot.phase === 'correction' && (
             <CorrectionPanel
