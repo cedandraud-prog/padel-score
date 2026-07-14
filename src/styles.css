@@ -2414,6 +2414,449 @@ input::placeholder {
   }
 }
 
+/* TASK-022 final score screen — normative dark match display. */
+
+body:has(.app-shell--match) {
+  color: #faf7f2;
+  background: #080a0e;
+}
+
+.app-shell--match {
+  width: min(calc(100% - 2rem), 54rem);
+  padding: 1rem 0 2rem;
+}
+
+.app-shell--match > header {
+  display: none;
+}
+
+.app-shell--match .scoreboard,
+.app-shell--match .status-panel,
+.app-shell--match .voice-command-help,
+.app-shell--match .controls {
+  border-color: rgb(250 247 242 / 17%);
+  background: #101319;
+  box-shadow: none;
+}
+
+.app-shell--match .scoreboard {
+  border-radius: 0.85rem;
+}
+
+.app-shell--match .scoreboard-header,
+.app-shell--match .team-row {
+  grid-template-columns: minmax(0, 1fr) 4.5rem 4.5rem 7rem;
+  column-gap: 0.35rem;
+}
+
+.app-shell--match .scoreboard-header {
+  min-height: 3.75rem;
+  padding: 0.75rem 1.35rem;
+  color: #a9abb2;
+  background: #0d1015;
+  font-size: 0.78rem;
+  font-weight: 520;
+  letter-spacing: 0.08em;
+}
+
+.app-shell--match .team-row {
+  position: relative;
+  min-height: 9.4rem;
+  border-top-color: rgb(250 247 242 / 14%);
+  padding: 1rem 1.35rem;
+  background: #101319;
+}
+
+.app-shell--match .team-row--serving::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0.25rem;
+  background: var(--color-accent);
+  content: '';
+}
+
+.app-shell--match .team-identity {
+  gap: 1rem;
+}
+
+.app-shell--match .team-label {
+  gap: 0.35rem;
+}
+
+.app-shell--match .editable-team-name {
+  gap: 0.45rem;
+  min-height: auto;
+  padding: 0;
+  color: #faf7f2;
+  background: transparent;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  font-weight: 720;
+  letter-spacing: -0.025em;
+}
+
+.app-shell--match .team-command-edit {
+  min-height: auto;
+  padding: 0;
+  color: #a9abb2;
+  font-size: clamp(0.82rem, 2vw, 1rem);
+  font-weight: 520;
+}
+
+.app-shell--match .editable-team-name:hover:not(:disabled),
+.app-shell--match .team-command-edit:hover:not(:disabled) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.app-shell--match .server-control {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  border: 2px solid #9699a2;
+  color: #9699a2;
+  background: transparent;
+}
+
+.app-shell--match .server-control--active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: transparent;
+  box-shadow:
+    0 0 0 2px rgb(91 95 242 / 22%),
+    0 0 14px rgb(91 95 242 / 44%);
+}
+
+.app-shell--match .server-indicator {
+  display: none;
+}
+
+.app-shell--match .score-value {
+  color: #a9abb2;
+  font-size: clamp(1.8rem, 5vw, 2.7rem);
+  font-weight: 560;
+  text-align: center;
+}
+
+.app-shell--match .points {
+  color: #faf7f2;
+  font-size: clamp(4.6rem, 11vw, 7rem);
+  font-weight: 730;
+  line-height: 0.85;
+  text-align: center;
+}
+
+.app-shell--match .next-server {
+  min-height: 3.3rem;
+  align-items: center;
+  border-top-color: rgb(250 247 242 / 14%);
+  padding: 0.7rem 1.35rem;
+  color: #a9abb2;
+  background: #0d1015;
+  font-size: 1rem;
+}
+
+.app-shell--match .next-server strong {
+  color: var(--color-accent-hover);
+  font-weight: 620;
+}
+
+.app-shell--match .status-panel {
+  min-height: 5.4rem;
+  padding: 1rem 1.35rem;
+}
+
+.match-microphone-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 1rem;
+}
+
+.match-microphone-icon {
+  flex: none;
+  width: 2rem;
+  height: 2rem;
+  color: var(--color-accent-hover);
+}
+
+.match-microphone-status--starting .match-microphone-icon,
+.match-microphone-status--speaking .match-microphone-icon {
+  color: var(--color-warning);
+}
+
+.match-microphone-status--error .match-microphone-icon,
+.match-microphone-status--unavailable .match-microphone-icon {
+  color: var(--color-danger);
+}
+
+.match-microphone-status--disabled .match-microphone-icon,
+.match-microphone-status--inactive .match-microphone-icon {
+  color: var(--color-text-subtle);
+}
+
+.match-microphone-status > div {
+  min-width: 0;
+}
+
+.app-shell--match .microphone {
+  margin: 0;
+  color: var(--color-accent-hover);
+  font-size: 1rem;
+  font-weight: 680;
+}
+
+.listening-prompt {
+  margin: 0.2rem 0 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}
+
+.app-shell--match .status-panel > .message {
+  max-width: 48%;
+  text-align: right;
+}
+
+.app-shell--match .voice-command-help {
+  padding: 0;
+  overflow: hidden;
+}
+
+.app-shell--match .voice-command-help summary {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) 1rem;
+  align-items: center;
+  gap: 0.8rem;
+  min-height: 4rem;
+  padding: 0.75rem 1.35rem;
+  list-style: none;
+  color: #faf7f2;
+  font-size: 1.05rem;
+  font-weight: 680;
+}
+
+.app-shell--match .voice-command-help summary::-webkit-details-marker {
+  display: none;
+}
+
+.voice-help-marker {
+  width: 0;
+  height: 0;
+  border-block: 0.38rem solid transparent;
+  border-left: 0.62rem solid #faf7f2;
+}
+
+.voice-help-chevron {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-right: 2px solid #a9abb2;
+  border-bottom: 2px solid #a9abb2;
+  transform: rotate(45deg) translate(-0.12rem, 0.12rem);
+  transition: transform 150ms ease;
+}
+
+.voice-command-help[open] .voice-help-chevron {
+  transform: rotate(225deg) translate(-0.12rem, 0.12rem);
+}
+
+.app-shell--match .voice-command-help dl {
+  margin: 0;
+  border-top: 1px solid rgb(250 247 242 / 12%);
+  padding: 0.85rem 1.35rem 1rem;
+}
+
+.app-shell--match .controls {
+  gap: 0.65rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.app-shell--match .controls .control-button {
+  min-height: 3.4rem;
+  gap: 0.65rem;
+  border-color: rgb(250 247 242 / 21%);
+  border-radius: 0.72rem;
+  color: #faf7f2;
+  background: #101319;
+  font-size: 1rem;
+  font-weight: 620;
+}
+
+.app-shell--match .controls .control-button svg {
+  flex: none;
+  width: 1.4rem;
+  height: 1.4rem;
+  color: #a9abb2;
+}
+
+.app-shell--match .controls .control-button--point {
+  border-color: var(--color-accent-hover);
+  background: #101319;
+  font-size: 1.05rem;
+  font-weight: 680;
+}
+
+.app-shell--match .controls .control-button--listening,
+.app-shell--match .controls .control-button--listening-active {
+  grid-column: 1 / -1;
+  border-color: var(--color-accent-hover);
+  color: var(--color-accent-hover);
+  background: #0d1015;
+}
+
+.app-shell--match .controls .control-button--listening svg,
+.app-shell--match .controls .control-button--listening-active svg {
+  color: var(--color-accent-hover);
+}
+
+.app-shell--match .controls .control-button--finish {
+  min-height: 3.8rem;
+  border-color: #ff555b;
+  color: #ff6f74;
+  background: #0d1015;
+}
+
+.app-shell--match .controls .control-button--finish svg {
+  color: #ff6f74;
+}
+
+@media (max-width: 700px) {
+  .app-shell--match {
+    width: 100%;
+    padding: max(0.5rem, env(safe-area-inset-top))
+      max(0.5rem, env(safe-area-inset-right))
+      max(1rem, env(safe-area-inset-bottom))
+      max(0.5rem, env(safe-area-inset-left));
+  }
+
+  .app-shell--match .scoreboard-header,
+  .app-shell--match .team-row {
+    grid-template-columns: minmax(0, 1fr) 2.35rem 2.35rem 4.15rem;
+    column-gap: 0.2rem;
+  }
+
+  .app-shell--match .scoreboard-header {
+    min-height: 2.75rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.62rem;
+  }
+
+  .app-shell--match .team-row {
+    min-height: 7.2rem;
+    padding: 0.7rem 0.65rem;
+  }
+
+  .app-shell--match .team-identity {
+    gap: 0.55rem;
+  }
+
+  .app-shell--match .server-control {
+    width: 2rem;
+    height: 2rem;
+    min-height: 2rem;
+  }
+
+  .app-shell--match .editable-team-name {
+    font-size: clamp(0.92rem, 4vw, 1.12rem);
+  }
+
+  .app-shell--match .team-command-edit {
+    max-width: 100%;
+    font-size: 0.72rem;
+  }
+
+  .app-shell--match .score-value {
+    font-size: 1.45rem;
+  }
+
+  .app-shell--match .points {
+    font-size: 4.1rem;
+  }
+
+  .app-shell--match .next-server {
+    min-height: 2.8rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.88rem;
+  }
+
+  .app-shell--match .status-panel {
+    min-height: 4.4rem;
+    padding: 0.7rem 0.9rem;
+  }
+
+  .match-microphone-status {
+    gap: 0.7rem;
+  }
+
+  .match-microphone-icon {
+    width: 1.55rem;
+    height: 1.55rem;
+  }
+
+  .app-shell--match .microphone {
+    font-size: 0.88rem;
+  }
+
+  .listening-prompt {
+    font-size: 0.8rem;
+  }
+
+  .app-shell--match .voice-command-help summary {
+    min-height: 3.4rem;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.95rem;
+  }
+
+  .app-shell--match .controls {
+    gap: 0.5rem;
+    margin-top: 0.7rem;
+  }
+
+  .app-shell--match .controls .control-button {
+    min-height: 3rem;
+    gap: 0.45rem;
+    padding: 0.5rem;
+    font-size: 0.82rem;
+  }
+
+  .app-shell--match .controls .control-button--point {
+    font-size: 0.92rem;
+  }
+
+  .app-shell--match .controls .control-button--finish {
+    min-height: 3.25rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .app-shell--match .scoreboard-header,
+  .app-shell--match .team-row {
+    grid-template-columns: minmax(0, 1fr) 2rem 2rem 3.65rem;
+  }
+
+  .app-shell--match .editable-team-name {
+    font-size: 0.95rem;
+  }
+
+  .app-shell--match .team-command-edit {
+    font-size: 0.66rem;
+  }
+
+  .app-shell--match .points {
+    font-size: 3.55rem;
+  }
+
+  .app-shell--match .controls .control-button {
+    padding-inline: 0.35rem;
+    font-size: 0.76rem;
+  }
+
+  .app-shell--match .controls .control-button svg {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+}
+
 /* TASK-022 final correction — consistent match action grid. */
 
 .controls {

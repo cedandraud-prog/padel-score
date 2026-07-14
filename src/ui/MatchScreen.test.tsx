@@ -70,7 +70,7 @@ describe('MatchScreen', () => {
       />,
     )
 
-    expect(html).toContain('<summary>Consignes vocales</summary>')
+    expect(html).toContain('<span>Consignes vocales</span>')
     for (const { command, description } of MATCH_VOICE_COMMAND_HELP) {
       expect(html).toContain(command)
       expect(html).toContain(description)
@@ -80,8 +80,11 @@ describe('MatchScreen', () => {
     expect(html).toContain('Commande : Rouge')
     expect(html).toContain('Commande : Bleu')
     expect(html).toContain('Changer les équipes')
+    expect(html).toContain('Point équipe 1')
+    expect(html).toContain('Point équipe 2')
+    expect(html).toContain('À vous de parler')
     expect(html).toMatch(
-      /class="control-button control-button--finish"[^>]*>Fin de match<\/button>/,
+      /class="control-button control-button--finish"[^>]*>[\s\S]*?<span>Fin de match<\/span><\/button>/,
     )
     expect(html).not.toContain('Recommencer')
   })
@@ -106,9 +109,9 @@ describe('MatchScreen', () => {
     expect(html).toContain('>Non</button>')
     expect(html).toContain('>Oui, terminer</button>')
     expect(html).not.toContain('control-button--finish')
-    expect(html).toMatch(/Point équipe A<\/button>/)
-    expect(html).toMatch(/Point équipe B<\/button>/)
-    expect(html).toMatch(/disabled=""[^>]*>Point équipe A/)
+    expect(html).toMatch(/Point équipe 1<\/button>/)
+    expect(html).toMatch(/Point équipe 2<\/button>/)
+    expect(html).toMatch(/disabled=""[^>]*>Point équipe 1/)
   })
 
   it('rend les points, jeux, sets et le serveur immédiatement lisibles', () => {
@@ -158,6 +161,25 @@ describe('MatchScreen', () => {
     )
 
     expect(html).toContain('Réactiver l’écoute')
+  })
+
+  it('n’affiche qu’une fois l’invitation à parler pendant l’écoute', () => {
+    const html = renderToStaticMarkup(
+      <MatchScreen
+        snapshot={{ ...snapshot, message: 'À vous de parler' }}
+        onPoint={() => undefined}
+        onUndo={() => undefined}
+        onScore={() => undefined}
+        onFullScore={() => undefined}
+        onCorrect={() => undefined}
+        onToggleListening={() => undefined}
+        onNewMatch={() => undefined}
+        onDisplayNameChange={() => undefined}
+        onServingTeamChange={() => undefined}
+      />,
+    )
+
+    expect(html.match(/À vous de parler/g)).toHaveLength(1)
   })
 
   it('annonce la préparation tant que la capture audio n’est pas prête', () => {

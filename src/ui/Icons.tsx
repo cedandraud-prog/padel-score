@@ -74,3 +74,54 @@ export function PlayIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function RepeatIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className}>
+      <path d="M20 7h-9a5 5 0 0 0-5 5v1" />
+      <path d="m17 4 3 3-3 3M4 17h9a5 5 0 0 0 5-5v-1" />
+      <path d="m7 20-3-3 3-3" />
+    </svg>
+  )
+}
+
+export function UndoIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className}>
+      <path d="m9 7-5 5 5 5M4 12h10a6 6 0 0 1 6 6" />
+    </svg>
+  )
+}
+
+export function ListScoreIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className}>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h.01M11 8h5M8 12h.01M11 12h5M8 16h.01M11 16h5" />
+    </svg>
+  )
+}
+
+export function BarsIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className}>
+      <path d="M5 20V13M10 20V8M15 20V4M20 20V10" />
+    </svg>
+  )
+}
+
+export function MicrophoneOffIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className}>
+      <path d="M9 5v6a3 3 0 0 0 4.8 2.4M15 10V5a3 3 0 0 0-5.2-2M5 11a7 7 0 0 0 11.2 5.6M19 11a7 7 0 0 1-.7 3M12 18v3M9 21h6M3 3l18 18" />
+    </svg>
+  )
+}
+
+export function FlagIcon({ className }: IconProps) {
+  return (
+    <svg {...iconProps} className={className}>
+      <path d="M5 21V4M5 5c4-3 8 3 14 0v10c-6 3-10-3-14 0" />
+    </svg>
+  )
+}

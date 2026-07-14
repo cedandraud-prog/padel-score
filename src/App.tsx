@@ -638,9 +638,17 @@ export default function App() {
 
   const isMatchSetup =
     snapshot.phase === 'setup' || snapshot.phase === 'voice-setup'
+  const isMatchScreen =
+    persistenceReady &&
+    !pendingRestore &&
+    !recapRecord &&
+    !historyRecords &&
+    !isMatchSetup
 
   return (
-    <main className={`app-shell${isMatchSetup ? ' app-shell--setup' : ''}`}>
+    <main
+      className={`app-shell${isMatchSetup ? ' app-shell--setup' : ''}${isMatchScreen ? ' app-shell--match' : ''}`}
+    >
       <header>
         <h1>PADEL SCORE</h1>
         <p>Vous jouez. Le système se souvient.</p>

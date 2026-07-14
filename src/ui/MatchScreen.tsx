@@ -3,7 +3,17 @@ import type { MatchControllerSnapshot } from '../application/MatchController'
 import type { TeamId } from '../core/matchTypes'
 import type { PlayerId } from '../core/playerPlusService'
 import { EditableDisplayName } from './EditableDisplayName'
-import { PencilIcon } from './Icons'
+import {
+  BarsIcon,
+  FlagIcon,
+  ListScoreIcon,
+  MicrophoneIcon,
+  MicrophoneOffIcon,
+  PencilIcon,
+  PlayerIcon,
+  RepeatIcon,
+  UndoIcon,
+} from './Icons'
 
 interface MatchScreenProps {
   snapshot: MatchControllerSnapshot
@@ -97,6 +107,12 @@ export function MatchScreen({
   const isPlayerPlus = snapshot.configuration?.mode === 'PLAYERS_PLUS'
   const finishConfirmationPending =
     snapshot.phase === 'session-end-confirmation'
+  const showStatusMessage =
+    snapshot.message &&
+    !(
+      snapshot.microphoneStatus === 'listening' &&
+      snapshot.message === 'À vous de parler'
+    )
   const playerServerName = snapshot.currentPlayerServer?.name
   const selection = snapshot.playerServerSelection
   const duplicateChoiceNames = selection
@@ -160,7 +176,7 @@ export function MatchScreen({
         </div>
         {[A, B].map((team) => (
           <div
-            className={`team-row${team.isWinner ? ' team-row--winner' : ''}`}
+            className={`team-row${team.isWinner ? ' team-row--winner' : ''}${team.isServing ? ' team-row--serving' : ''}`}
             key={team.id}
           >
             <div className="team-identity">
@@ -302,21 +318,30 @@ export function MatchScreen({
       )}
 
       <section className="status-panel" aria-live="polite">
-        <p className={microphoneClass}>
-          <span className="status-indicator" aria-hidden="true" />{' '}
-          {snapshot.microphoneStatus === 'listening'
-            ? 'Microphone en écoute'
-            : snapshot.microphoneStatus === 'starting'
-              ? 'Préparation du microphone'
-              : snapshot.microphoneStatus === 'speaking'
-                ? 'Annonce en cours — écoute suspendue'
-                : snapshot.microphoneStatus === 'unavailable'
-                  ? 'Reconnaissance indisponible'
-                  : snapshot.microphoneStatus === 'error'
-                    ? 'Erreur microphone'
-                    : 'Microphone désactivé'}
-        </p>
-        {snapshot.message && (
+        <div
+          className={`match-microphone-status match-microphone-status--${snapshot.microphoneStatus}`}
+        >
+          <MicrophoneIcon className="match-microphone-icon" />
+          <div>
+            <p className={microphoneClass}>
+              {snapshot.microphoneStatus === 'listening'
+                ? 'Microphone en écoute'
+                : snapshot.microphoneStatus === 'starting'
+                  ? 'Préparation du microphone'
+                  : snapshot.microphoneStatus === 'speaking'
+                    ? 'Annonce en cours — écoute suspendue'
+                    : snapshot.microphoneStatus === 'unavailable'
+                      ? 'Reconnaissance indisponible'
+                      : snapshot.microphoneStatus === 'error'
+                        ? 'Erreur microphone'
+                        : 'Microphone désactivé'}
+            </p>
+            {snapshot.microphoneStatus === 'listening' && (
+              <p className="listening-prompt">À vous de parler</p>
+            )}
+          </div>
+        </div>
+        {showStatusMessage && (
           <p className="message" role="alert">
             {snapshot.message}
           </p>
@@ -324,7 +349,11 @@ export function MatchScreen({
       </section>
 
       <details className="voice-command-help">
-        <summary>Consignes vocales</summary>
+        <summary>
+          <span className="voice-help-marker" aria-hidden="true" />
+          <span>Consignes vocales</span>
+          <span className="voice-help-chevron" aria-hidden="true" />
+        </summary>
         <dl>
           {[...teamVoiceCommands, ...availableCommandHelp].map(
             ({ command, description }) => (
@@ -344,7 +373,7 @@ export function MatchScreen({
           onClick={() => onPoint('A')}
           disabled={snapshot.phase !== 'match'}
         >
-          Point équipe A
+          Point équipe 1
         </button>
         <button
           className="control-button control-button--point"
@@ -352,7 +381,7 @@ export function MatchScreen({
           onClick={() => onPoint('B')}
           disabled={snapshot.phase !== 'match'}
         >
-          Point équipe B
+          Point équipe 2
         </button>
         {snapshot.session.state === 'IN_PROGRESS' && (
           <button
@@ -361,7 +390,8 @@ export function MatchScreen({
             onClick={onChangeTeams}
             disabled={finishConfirmationPending}
           >
-            Changer les équipes
+            <RepeatIcon />
+            <span>Changer les équipes</span>
           </button>
         )}
         <button
@@ -370,7 +400,8 @@ export function MatchScreen({
           onClick={onUndo}
           disabled={finishConfirmationPending}
         >
-          Annuler
+          <UndoIcon />
+          <span>Annuler</span>
         </button>
         <button
           className="control-button control-button--secondary"
@@ -378,7 +409,8 @@ export function MatchScreen({
           onClick={onScore}
           disabled={finishConfirmationPending}
         >
-          Score
+          <ListScoreIcon />
+          <span>Score</span>
         </button>
         <button
           className="control-button control-button--secondary"
@@ -386,7 +418,8 @@ export function MatchScreen({
           onClick={onFullScore}
           disabled={finishConfirmationPending}
         >
-          Score complet
+          <BarsIcon />
+          <span>Score complet</span>
         </button>
         <button
           className="control-button control-button--secondary"
@@ -394,7 +427,8 @@ export function MatchScreen({
           onClick={onCorrect}
           disabled={finishConfirmationPending}
         >
-          Corriger
+          <PencilIcon />
+          <span>Corriger</span>
         </button>
         {isPlayerPlus && (
           <button
@@ -403,7 +437,8 @@ export function MatchScreen({
             onClick={onRequestPlayerServerCorrection}
             disabled={finishConfirmationPending}
           >
-            Serveur
+            <PlayerIcon />
+            <span>Serveur</span>
           </button>
         )}
         <button
@@ -412,7 +447,10 @@ export function MatchScreen({
           onClick={onToggleListening}
           disabled={!snapshot.recognitionAvailable || finishConfirmationPending}
         >
-          {listening ? 'Désactiver l’écoute' : 'Réactiver l’écoute'}
+          {listening ? <MicrophoneOffIcon /> : <MicrophoneIcon />}
+          <span>
+            {listening ? 'Désactiver l’écoute' : 'Réactiver l’écoute'}
+          </span>
         </button>
         {snapshot.session.state === 'IN_PROGRESS' &&
           !finishConfirmationPending && (
@@ -421,7 +459,8 @@ export function MatchScreen({
               type="button"
               onClick={onRequestSessionFinish}
             >
-              Fin de match
+              <FlagIcon />
+              <span>Fin de match</span>
             </button>
           )}
         {finishConfirmationPending && (
