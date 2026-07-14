@@ -7,12 +7,13 @@ import {
 } from './matchConfiguration'
 import { normalizeSpeech } from '../voice/normalizeSpeech'
 import { matchesControlledResponse } from '../voice/controlledResponseAliases'
+import type { PlayerId, PlayerSide } from '../core/playerPlusService'
 
 export type SetupMode = 'PLAYER' | 'PLAYERS_PLUS'
-export type PlayerSide = 'RIGHT' | 'LEFT'
+export type { PlayerSide } from '../core/playerPlusService'
 
 export interface PlayerPlusPlayerDraft {
-  id: 'A1' | 'A2' | 'B1' | 'B2'
+  id: PlayerId
   name: string
   side: PlayerSide
 }
