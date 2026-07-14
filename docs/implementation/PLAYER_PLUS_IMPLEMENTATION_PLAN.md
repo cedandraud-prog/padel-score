@@ -3,9 +3,9 @@
 ## Statut du document
 
 Plan progressif issu de l’ADR-011 acceptée. TASK-016, ses correctifs 016.2 à
-016.4 et TASK-017 sont réalisés et validés techniquement ainsi que sur la
-Preview PWA. PLAYER+ reste une expérience en construction : sa configuration
-est disponible, mais aucun match PLAYER+ ne peut encore démarrer.
+016.4, TASK-017 et TASK-018.1 sont réalisés et validés techniquement ainsi que
+sur la Preview PWA. PLAYER+ reste une expérience en construction : sa
+configuration est disponible, mais aucun match PLAYER+ ne peut encore démarrer.
 
 ## 1. Décision d’architecture
 
@@ -116,7 +116,7 @@ règles de score.
 ```ts
 type GameMode = 'PLAYER' | 'PLAYERS_PLUS'
 type PlayerSide = 'RIGHT' | 'LEFT'
-type PlayerId = string
+type PlayerId = 'A1' | 'A2' | 'B1' | 'B2'
 
 interface PlayerParticipant {
   id: PlayerId
@@ -124,6 +124,15 @@ interface PlayerParticipant {
   teamId: TeamId
   side: PlayerSide
 }
+
+interface PendingPlayerServiceOrder {
+  status: 'PENDING_SECOND_SERVER'
+  participants: readonly PlayerParticipant[]
+  firstServer: PlayerId
+  firstServingTeam: TeamId
+}
+
+type PlayerServiceOrder = readonly [PlayerId, PlayerId, PlayerId, PlayerId]
 
 interface PlayerMatchConfiguration {
   mode: 'PLAYER'
@@ -273,6 +282,35 @@ Pour PLAYER, cette structure conserve exactement le comportement actuel. Pour
 PLAYER+, le cycle d’un set est par exemple `A1 → B1 → A2 → B2` et avance après
 chaque jeu.
 
+### Contrat progressif PLAYER+ validé
+
+TASK-018.1 fournit un contrat pur encore déconnecté du `ScoreEngine` :
+
+1. le premier serveur du match est validé au premier jeu ;
+2. l’état `PendingPlayerServiceOrder` conserve ce choix sans inventer le serveur
+   adverse ;
+3. le premier serveur de l’équipe adverse est validé au deuxième jeu ;
+4. les partenaires complètent alors automatiquement les troisième et quatrième
+   positions ;
+5. le `PlayerServiceOrder` readonly obtenu est figé pour le reste du set.
+
+Les huit combinaisons initiales sont :
+
+```text
+A1 + B1 → A1, B1, A2, B2
+A1 + B2 → A1, B2, A2, B1
+A2 + B1 → A2, B1, A1, B2
+A2 + B2 → A2, B2, A1, B1
+B1 + A1 → B1, A1, B2, A2
+B1 + A2 → B1, A2, B2, A1
+B2 + A1 → B2, A1, B1, A2
+B2 + A2 → B2, A2, B1, A1
+```
+
+Les `PlayerId` sont la source de vérité. Les noms peuvent être identiques et les
+côtés `RIGHT`/`LEFT` n’interviennent jamais dans cet ordre. L’état incomplet
+après le premier choix est un état métier normal.
+
 ### Nouveau set
 
 La continuité réglementaire détermine l’équipe du premier jeu du set suivant,
@@ -309,8 +347,9 @@ Une seule opération métier corrige le serveur :
 - en tie-break, elle ré-ancre le serveur du point courant tout en conservant la
   séquence de blocs d’un puis deux services.
 
-Les homonymes sont résolus dans `MatchController` avant l’appel au moteur. Une
-réponse ambiguë ne déclenche aucune correction.
+Les noms ne suffisent pas à résoudre les homonymes : seule une sélection ramenée
+à un `PlayerId` peut atteindre le moteur. L’interaction permettant cette
+sélection reste hors de TASK-018.1.
 
 ### Undo
 
@@ -392,8 +431,8 @@ après refactoring, plus annulation d’une correction de serveur.
 
 ### TASK-018 — Ajouter les participants et le service PLAYER+
 
-**Statut : prochaine étape candidate, à analyser avant lancement.** Son
-périmètre n’est pas modifié par cette capitalisation.
+**Statut : découpée, non réalisée globalement.** Aucun incrément suivant n’est
+annoncé avant analyse de son périmètre.
 
 - ajouter les types joueur, position et ordre de service ;
 - valider les invariants PLAYER+ ;
@@ -403,6 +442,18 @@ périmètre n’est pas modifié par cette capitalisation.
 
 Validation intermédiaire : tests unitaires et tests de contrat exécutés sur les
 deux modes, sans exposition utilisateur de PLAYER+.
+
+#### TASK-018.1 — Contrat pur des participants et de l’ordre progressif
+
+**Statut : réalisée et validée sur la Preview PWA.**
+
+- définir `PlayerId`, `PlayerSide`, `PlayerParticipant`,
+  `PendingPlayerServiceOrder` et `PlayerServiceOrder` ;
+- valider les quatre participants canoniques et leurs invariants ;
+- autoriser les homonymes grâce aux identifiants stables ;
+- représenter normalement l’attente du serveur adverse ;
+- construire et figer l’un des huit ordres possibles après le deuxième choix ;
+- rester sans connexion au `ScoreEngine` et sans démarrage PLAYER+.
 
 ### TASK-019 — Connecter la configuration PLAYER+
 
@@ -449,7 +500,7 @@ supporter proprement quatre joueurs.
 | Jeux prolongés     | serveur inchangé dans le jeu           | joueur inchangé dans le jeu                     | égalité/avantage sans effet sur rotation             |
 | Tie-break          | 1 puis 2 services par équipe           | 1 puis 2 services par joueur                    | 6-6, 10-8, correction de points                      |
 | Nouveau set        | prochaine équipe dérivée               | prochaine équipe + nouvel ordre interne         | blocage avant ordre valide                           |
-| Correction serveur | choix équipe                           | choix joueur, homonyme clarifié                 | score et positions inchangés                         |
+| Correction serveur | choix équipe                           | choix par `PlayerId`, interaction à définir     | score et positions inchangés                         |
 | Undo               | point, jeu, set, tie-break, correction | mêmes cas avec joueur et ordre                  | restauration exacte de l’instantané                  |
 | Affichage          | équipe courante/suivante               | joueur courant/suivant                          | page et composants communs                           |
 | Annonces           | nom d’équipe                           | nom de joueur                                   | score et transitions communs                         |
@@ -477,7 +528,7 @@ ils ne remplacent jamais les tests historiques.
 | Choix du nouvel ordre trop intrusif    | État explicite entre les sets et test terrain avant enrichissement           |
 | PLAYER+ partiel visible                | Configuration explicite et démarrage indisponible jusqu’à livraison complète |
 | Transcription variable selon le réseau | Contrainte terrain suivie, sans correctif supposé sans cause déterministe    |
-| Homonymes de joueurs                   | Résolution exacte, clarification par équipe, blocage des homonymes internes  |
+| Homonymes de joueurs                   | Identité par `PlayerId` ; interaction de sélection traitée séparément        |
 
 ## 12. Review et validation
 

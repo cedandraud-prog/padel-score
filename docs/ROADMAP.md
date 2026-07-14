@@ -15,8 +15,10 @@
 - **TASK-017 — validée** — `ServiceState` PLAYER historisé dans le
   `ScoreEngine`, correction du serveur annulable et suppression de
   `servingTeamSwapped`.
-- **TASK-018 — prochaine étape candidate** — Participants et service individuel
-  PLAYER+, sous réserve d’une analyse de périmètre avant lancement.
+- **TASK-018.1 — validée** — Contrat pur des quatre participants et de l’ordre
+  progressif du premier set, encore déconnecté du moteur.
+- **TASK-018 — découpée, non réalisée globalement** — Aucun incrément suivant
+  n’est engagé avant analyse de son périmètre.
 - **CAMP-001** — Validation de l’expérience pendant un vrai match.
 
 PLAYER+ est actuellement sélectionnable et configurable, mais reste non

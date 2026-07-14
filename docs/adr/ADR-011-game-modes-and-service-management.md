@@ -4,10 +4,10 @@
 
 Accepted — amendée par ADR-011.1 le 2026-07-13.
 
-État d’application au 2026-07-14 : TASK-016, ses correctifs 016.2 à 016.4 et
-TASK-017 sont réalisés et validés techniquement ainsi que sur la Preview PWA.
-PLAYER est opérationnel. PLAYER+ est sélectionnable et configurable, mais reste
-non démarrable et non connecté au moteur.
+État d’application au 2026-07-14 : TASK-016, ses correctifs 016.2 à 016.4,
+TASK-017 et TASK-018.1 sont réalisés et validés techniquement ainsi que sur la
+Preview PWA. PLAYER est opérationnel. PLAYER+ est sélectionnable et configurable,
+mais reste non démarrable et non connecté au moteur.
 
 ## Contexte
 
@@ -42,6 +42,8 @@ invalides. Dans l’état validé actuel, seul PLAYER peut démarrer ; PLAYER+ a
   clavier.
 - Cette configuration PLAYER+ reste un brouillon applicatif sans connexion au
   `ScoreEngine`.
+- TASK-018.1 formalise les quatre identifiants `A1`, `A2`, `B1`, `B2` et l’ordre
+  progressif du premier set, sans activer PLAYER+.
 - En PLAYER, `ServiceState` appartient au `MatchState` et à ses instantanés.
 - `ScoreEngine` est l’unique source de vérité du service ; la correction est
   historisée et restaurée par `undo()`.
@@ -166,14 +168,18 @@ jeu ne doit pas être confondue avec un changement de côté physique sur le ter
 
 ### Ordre initial du service
 
-L'ordre de saisie définit l'ordre interne proposé pour le premier set :
+L’ordre du premier set est déterminé progressivement :
 
-- le joueur 1 est le premier serveur interne proposé ;
-- le joueur 2 est le suivant ;
-- si le premier serveur global choisi est le joueur 2 de son équipe, l'ordre de
-  cette équipe est inversé ;
-- l'équipe adverse conserve son ordre de saisie ;
-- le récapitulatif expose la rotation complète avant le démarrage.
+1. le serveur du premier jeu détermine l’équipe qui commence ;
+2. l’absence du serveur adverse constitue un état métier incomplet valide ;
+3. au deuxième jeu, un joueur de l’équipe adverse est explicitement choisi ;
+4. les partenaires des deux premiers serveurs occupent respectivement les
+   troisième et quatrième positions ;
+5. l’ordre complet est ensuite figé pour le reste du set.
+
+Les noms, les côtés et l’ordre du tableau de participants ne déterminent jamais
+la rotation. Seuls les `PlayerId` canoniques `A1`, `A2`, `B1`, `B2` portent
+l’identité. Les huit combinaisons sont détaillées dans le plan d’implémentation.
 
 ### Rotation
 
@@ -209,10 +215,11 @@ La correction :
 
 ### Homonymes
 
-- une correspondance normalisée unique sélectionne le joueur ;
-- un homonyme dans l'autre équipe déclenche une clarification par équipe ;
-- deux homonymes dans la même équipe bloquent le démarrage jusqu'à distinction ;
-- aucun fuzzy matching général n'est utilisé.
+- deux joueurs peuvent porter le même nom affiché, y compris dans la même équipe ;
+- les identifiants stables, et non les noms, déterminent leur identité ;
+- le contrat pur n’ajoute aucune résolution vocale des homonymes ;
+- une future interaction de sélection nécessitera son propre périmètre validé ;
+- aucun fuzzy matching général n'est introduit.
 
 ### Tie-break
 
@@ -267,6 +274,14 @@ interface Player {
   side: PlayerSide
 }
 
+interface PendingPlayerServiceOrder {
+  status: 'PENDING_SECOND_SERVER'
+  firstServer: PlayerId
+  firstServingTeam: TeamId
+}
+
+type PlayerServiceOrder = readonly [PlayerId, PlayerId, PlayerId, PlayerId]
+
 interface PlayerMatchConfiguration {
   mode: 'PLAYER'
   teams: Record<TeamId, PlayerTeam>
@@ -303,6 +318,8 @@ et aucun faux joueur n'est créé à partir d'un ancien nom d'équipe.
 - la configuration prépare une union discriminée par mode ;
 - PLAYER conserve la gestion actuelle par équipe ;
 - l’état de service PLAYER est détenu et historisé par le `ScoreEngine` ;
+- le contrat pur des participants et de l’ordre progressif PLAYER+ est validé,
+  mais reste déconnecté du moteur ;
 - PLAYER+ ajoute joueurs, positions et rotation individuelle ;
 - la configuration et la page score s'adaptent au mode ;
 - les annonces nomment une équipe en PLAYER et un joueur en PLAYER+ ;

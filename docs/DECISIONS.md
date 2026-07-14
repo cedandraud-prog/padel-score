@@ -43,3 +43,19 @@ Statut : validé techniquement et sur la Preview PWA
   déterministe observée.
 - **DEC-019** — Les travaux restent conduits sur `test/task-016-pwa` ; `main`
   demeure la version stable de production.
+
+## 2026-07-14 — Ordre initial du service PLAYER+
+
+Statut : validé techniquement et sur la Preview PWA
+
+- **DEC-020** — `A1`, `A2`, `B1` et `B2` sont les identifiants canoniques des
+  participants PLAYER+. Les noms peuvent être identiques et ne déterminent
+  jamais l’identité.
+- **DEC-021** — L’ordre du premier set est déterminé progressivement : serveur
+  du premier jeu, puis serveur adverse au deuxième jeu, puis partenaires dans
+  les deux positions restantes. L’ordre est ensuite figé pour le set.
+- **DEC-022** — Les côtés `RIGHT` et `LEFT` restent indépendants de l’ordre de
+  service.
+- **DEC-023** — Le contrat validé par TASK-018.1 reste déconnecté du
+  `ScoreEngine`. Il n’active ni démarrage, ni rotation, ni tie-break, ni
+  correction individuelle PLAYER+.

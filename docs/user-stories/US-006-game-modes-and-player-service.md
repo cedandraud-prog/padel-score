@@ -7,7 +7,8 @@ Partiellement réalisée — ADR-011 Accepted.
 La configuration commune et le service PLAYER historisé sont validés
 techniquement et sur la Preview PWA. PLAYER+ est sélectionnable et configurable,
 mais son démarrage, sa rotation individuelle et sa connexion au moteur ne sont
-pas encore implémentés.
+pas encore implémentés. Le contrat pur des participants et de l’ordre progressif
+du premier set est validé avec TASK-018.1.
 
 ## User Story principale
 
@@ -82,13 +83,20 @@ effectuée.
 
 ### PLAYER+
 
-- ordre interne fixe pour chaque équipe pendant le set ;
-- cycle individuel des quatre joueurs ;
+- quatre identifiants stables `A1`, `A2`, `B1`, `B2` indépendants des noms ;
+- homonymes autorisés ;
+- premier serveur validé au premier jeu ;
+- premier serveur adverse validé au deuxième jeu ;
+- ordre complet ensuite figé pour le set ;
 - correction par joueur sans modification du score ou des positions ;
 - au tie-break : un point pour le premier serveur, puis deux points par joueur ;
 - positions inchangées et sans effet sur la rotation ;
 - nouvel ordre interne possible au set suivant ;
 - `undo()` restaure le bon serveur indépendamment de sa position.
+
+Seuls les participants et la détermination progressive de l’ordre initial sont
+actuellement validés. Rotation effective, tie-break, correction et `undo()`
+individuels restent sans implémentation PLAYER+.
 
 ## Saisie
 
@@ -118,11 +126,11 @@ effectuée.
 Les critères de configuration 1 à 8, 10 et 11 sont représentés dans le parcours
 validé. Le critère 9 est validé pour PLAYER uniquement ; les règles de rotation
 et de tie-break PLAYER+ restent à implémenter dans le moteur. Le service PLAYER
-et son `undo()` sont validés.
+et son `undo()` sont validés. TASK-018.1 valide les participants, l’état incomplet
+après le premier choix et les huit ordres initiaux, sans connexion au moteur.
 
 ## Tests restant à prévoir
 
-- invariants complets des participants et de l’ordre individuel ;
 - cycle individuel en PLAYER+ ;
 - tie-break PLAYER+ ;
 - correction et `undo()` du serveur individuel indépendamment des positions ;

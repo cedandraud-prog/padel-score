@@ -59,6 +59,16 @@ En `PLAYERS_PLUS`, chaque joueur possède une position `RIGHT` ou `LEFT` dans le
 contexte du match et chaque équipe possède exactement une position de chaque
 type. La position reste indépendante de l'ordre de service.
 
+Le domaine partagé définit désormais `PlayerId`, `PlayerSide`,
+`PlayerParticipant`, `PendingPlayerServiceOrder` et le tuple readonly
+`PlayerServiceOrder`. Les identifiants canoniques sont `A1`, `A2`, `B1`, `B2` ;
+les noms et les côtés ne participent pas au calcul de l’ordre.
+
+Le contrat est progressif : le premier serveur crée un état incomplet normal,
+puis le choix d’un serveur de l’équipe adverse au deuxième jeu produit l’ordre
+complet et figé du set. Ce module reste pur et déconnecté de `MatchState`,
+`ServiceState`, `ScoreEngine` et `MatchController`.
+
 Pour PLAYER, `MatchState` contient un `ServiceState` avec l’équipe au service et
 l’ancre du tie-break. Cet état appartient aux instantanés du `ScoreEngine` : une
 correction du serveur est historisée et `undo()` restaure exactement l’état
